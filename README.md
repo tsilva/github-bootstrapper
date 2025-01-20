@@ -4,25 +4,26 @@ A tool to automatically sync all your GitHub repositories.
 
 ## Setup
 
-1. Install Miniconda if you haven't already:
+1. Clone this repository
+
+2. Create a Python virtual environment:
    ```bash
-   wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-   bash miniconda.sh -b -p $HOME/miniconda
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows, use `.venv\Scripts\activate`
    ```
 
-2. Create and activate the conda environment:
+3. Install dependencies:
    ```bash
-   conda env create -f environment.yml
-   conda activate bootstrapper
+   pip install -r requirements.txt
    ```
 
-3. Configure the .env file:
+4. Configure the .env file:
    ```bash
    cp .env.example .env
    # Edit .env with your GitHub username and token
    ```
 
-4. Run the script:
+5. Run the script:
    ```bash
    python main.py
    ```
