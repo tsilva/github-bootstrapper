@@ -1,6 +1,5 @@
+from github import Github
 from dotenv import load_dotenv
-load_dotenv()
-
 import os
 import sys
 import logging
@@ -98,57 +97,25 @@ def get_base_path(username: str) -> str:
     current_dir = Path(__file__).resolve().parent
     return str(current_dir.parent / "repos" / username)
 
-def main() -> None:
-    config = Config()
+def main():
+    # Load environment variables
+    load_dotenv()
     
-    if not config.is_valid:
-        logger.error("Missing required environment variables: GITHUB_TOKEN and GITHUB_USERNAME")
-        return
+    # Initialize GitHub client
+    token = os.getenv('GITHUB_TOKEN')
+    g = Github(token) if token else Github()
     
-    username = os.getenv('GITHUB_USERNAME')
-    if not username:
-        logger.error("Error: GITHUB_USERNAME not set in .env file")
-        sys.exit(1)
+    # Get authenticated user
+    user = g.get_user()
+    print(f"Logged in as: {user.login}")
     
-    base_path = get_base_path(username)
-    
-    # Ensure base directory exists
-    os.makedirs(base_path, exist_ok=True)
-    
-    # Get all repositories
-    try:
-        repos = get_repos(username)
-    except Exception as e:
-        logger.error(f"Failed to fetch repositories: {e}")
-        return
-    
-    # Process repositories in parallel
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_repo = {
-            executor.submit(
-                sync_repo, 
-                repo['clone_url'], 
-                repo['name'], 
-                base_path
-            ): repo['name'] 
-            for repo in repos if not repo['fork']
-        }
-        
-        for future in as_completed(future_to_repo):
-            repo_name = future_to_repo[future]
-            try:
-                success = future.result()
-                if success:
-                    logger.info(f"Successfully processed {repo_name}")
-            except Exception as e:
-                logger.error(f"Error processing {repo_name}: {e}")
+    # List all repositories
+    for repo in user.get_repos():
+        print(f"Repository: {repo.full_name}")
+        print(f"- URL: {repo.html_url}")
+        print(f"- Description: {repo.description}")
+        print(f"- Stars: {repo.stargazers_count}")
+        print("---")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        logger.info("\nOperation cancelled by user")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        sys.exit(1)
+    main()

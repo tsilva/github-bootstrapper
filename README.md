@@ -1,6 +1,6 @@
 # github-bootstrapper
 
-A tool to automatically sync all your GitHub repositories.
+A tool to automatically sync all your GitHub repositories using PyGithub.
 
 ## Setup
 
