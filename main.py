@@ -15,18 +15,86 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def get_user_orgs(username: str, headers: dict) -> List[str]:
+    """Get all organizations for a user."""
+    url = f"https://api.github.com/users/{username}/orgs"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return [org['login'] for org in response.json()]
+    return []
+
+def get_org_repos(org: str, headers: dict) -> List[Dict[str, Any]]:
+    """Get all repositories for an organization."""
+    all_repos = []
+    page = 1
+    per_page = 100
+    
+    while True:
+        url = f"https://api.github.com/orgs/{org}/repos?page={page}&per_page={per_page}"
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code != 200:
+            logger.warning(f"Failed to get repositories for org {org}: {response.status_code}")
+            break
+        
+        repos_page = response.json()
+        if not repos_page:
+            break
+            
+        all_repos.extend(repos_page)
+        page += 1
+    
+    return all_repos
+
 def get_repos(username: str) -> List[Dict[str, Any]]:
-    """Get all repositories for a given username."""
-    url = f"https://api.github.com/users/{username}/repos"
-    response = requests.get(url)
-    
-    if response.status_code == 403:
-        logger.error("GitHub API rate limit exceeded. Consider waiting or adding GITHUB_TOKEN")
-        sys.exit(1)
-    elif response.status_code != 200:
-        raise Exception(f"Failed to get repositories: {response.status_code}")
-    
-    return response.json()
+    """Get all repositories for a given username, including org repos."""
+    headers = {}
+    if token := os.getenv('GITHUB_TOKEN'):
+        headers['Authorization'] = f'token {token}'
+        logger.info("Using GitHub token for authentication")
+        # When authenticated, use different endpoint to get ALL repos including private ones
+        url_template = "https://api.github.com/user/repos?page={}&per_page={}&affiliation=owner,collaborator,organization_member"
+    else:
+        # Unauthenticated - only public repos
+        url_template = f"https://api.github.com/users/{username}/repos?page={{}}&per_page={{}}"
+
+    # Get repos using selected endpoint
+    all_repos = []
+    page = 1
+    per_page = 100
+
+    while True:
+        url = url_template.format(page, per_page)
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 403:
+            logger.error("GitHub API rate limit exceeded")
+            sys.exit(1)
+        elif response.status_code != 200:
+            raise Exception(f"Failed to get repositories: {response.status_code}")
+        
+        repos_page = response.json()
+        if not repos_page:
+            break
+            
+        all_repos.extend(repos_page)
+        page += 1
+
+    # No need to fetch org repos separately when using authenticated endpoint
+    if not headers:
+        # Only fetch org repos if not authenticated
+        orgs = get_user_orgs(username, headers)
+        logger.info(f"Found {len(orgs)} organizations")
+        
+        for org in orgs:
+            org_repos = get_org_repos(org, headers)
+            logger.info(f"Found {len(org_repos)} repositories in organization {org}")
+            all_repos.extend(org_repos)
+
+    # Deduplicate repos based on id
+    unique_repos = {repo['id']: repo for repo in all_repos}.values()
+    logger.info(f"Found {len(unique_repos)} unique repositories total")
+    return list(unique_repos)
 
 def has_unstaged_changes(repo_path: str) -> bool:
     """Check if repository has unstaged changes."""
@@ -40,6 +108,14 @@ def has_unstaged_changes(repo_path: str) -> bool:
         return bool(result.stdout.strip())
     except subprocess.CalledProcessError:
         return True
+
+def get_clone_url(repo: Dict[str, Any]) -> str:
+    """Get the appropriate clone URL based on token availability."""
+    if token := os.getenv('GITHUB_TOKEN'):
+        # Use HTTPS URL with token for authentication
+        base_url = repo['clone_url'].replace('https://', '')
+        return f'https://{token}@{base_url}'
+    return repo['clone_url']
 
 def sync_repo(repo_url: str, repo_name: str, base_path: str) -> bool:
     """Sync a single repository."""
@@ -105,11 +181,12 @@ def main():
     for repo in repos:
         logger.info(f"Repository: {repo['full_name']}")
         logger.info(f"- URL: {repo['html_url']}")
+        logger.info(f"- Private: {repo['private']}")
         logger.info(f"- Description: {repo['description']}")
         logger.info("---")
         
-        # Sync repository
-        sync_repo(repo['clone_url'], repo['name'], repos_dir)
+        # Sync repository using appropriate URL
+        sync_repo(get_clone_url(repo), repo['name'], repos_dir)
 
 if __name__ == "__main__":
     main()
