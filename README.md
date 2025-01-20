@@ -72,7 +72,3 @@ Logs include:
 - Clone/update operations
 - Success/failure status
 - Processing mode (parallel/sequential)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
