@@ -9,13 +9,32 @@ import subprocess
 from typing import List, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
+from datetime import datetime
+
+def setup_logging() -> None:
+    """Configure logging to both file and console."""
+    # Create logs directory if it doesn't exist
+    logs_dir = os.path.join(os.path.dirname(__file__), 'logs')
+    os.makedirs(logs_dir, exist_ok=True)
+    
+    # Create timestamp-based log filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = os.path.join(logs_dir, f'github_sync_{timestamp}.log')
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+setup_logging()
 logger = logging.getLogger(__name__)
+logger.info("Starting GitHub repository sync")
 
 def get_user_orgs(username: str, headers: dict) -> List[str]:
     """Get all organizations for a user."""
@@ -175,6 +194,7 @@ def process_repo(repo: Dict[str, Any], repos_dir: str) -> Tuple[str, bool]:
     return name, success
 
 def main():
+    logger.info("=== Starting new sync session ===")
     # Validate environment variables
     username = os.getenv('GITHUB_USERNAME')
     if not username:
@@ -216,6 +236,7 @@ def main():
         logger.info("Using sequential processing (no token available)")
         for repo in repos:
             process_repo(repo, repos_dir)
+    logger.info("=== Sync session completed ===")
 
 if __name__ == "__main__":
     main()
