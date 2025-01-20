@@ -6,7 +6,9 @@ import os
 import logging
 import requests
 import subprocess
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing
 
 # Configure logging
 logging.basicConfig(
@@ -160,6 +162,18 @@ def sync_repo(repo_url: str, repo_name: str, base_path: str) -> bool:
     
     return True
 
+def process_repo(repo: Dict[str, Any], repos_dir: str) -> Tuple[str, bool]:
+    """Process a single repository and return its name and success status."""
+    name = repo['name']
+    logger.info(f"Repository: {repo['full_name']}")
+    logger.info(f"- URL: {repo['html_url']}")
+    logger.info(f"- Private: {repo['private']}")
+    logger.info(f"- Description: {repo['description']}")
+    logger.info("---")
+    
+    success = sync_repo(get_clone_url(repo), name, repos_dir)
+    return name, success
+
 def main():
     # Validate environment variables
     username = os.getenv('GITHUB_USERNAME')
@@ -176,17 +190,32 @@ def main():
         logger.error(f"REPOS_BASE_DIR '{repos_dir}' does not exist or is not a directory")
         sys.exit(1)
     
-    # Fetch and process repositories
+    # Fetch repositories
     repos = get_repos(username)
-    for repo in repos:
-        logger.info(f"Repository: {repo['full_name']}")
-        logger.info(f"- URL: {repo['html_url']}")
-        logger.info(f"- Private: {repo['private']}")
-        logger.info(f"- Description: {repo['description']}")
-        logger.info("---")
+    
+    # Determine processing mode based on token availability
+    if token := os.getenv('GITHUB_TOKEN'):
+        # Parallel processing with token
+        max_workers = multiprocessing.cpu_count()
+        logger.info(f"Using parallel processing with {max_workers} workers")
         
-        # Sync repository using appropriate URL
-        sync_repo(get_clone_url(repo), repo['name'], repos_dir)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_repo = {
+                executor.submit(process_repo, repo, repos_dir): repo
+                for repo in repos
+            }
+            
+            # Process completed tasks
+            for future in as_completed(future_to_repo):
+                repo_name, success = future.result()
+                status = "Successfully processed" if success else "Failed to process"
+                logger.info(f"{status} repository: {repo_name}")
+    else:
+        # Sequential processing without token
+        logger.info("Using sequential processing (no token available)")
+        for repo in repos:
+            process_repo(repo, repos_dir)
 
 if __name__ == "__main__":
     main()
