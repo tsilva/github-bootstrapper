@@ -1,8 +1,12 @@
 # 🔄 GitHub Bootstrapper
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <img src="logo.jpg" alt="PDF Merger Logo" width="400"/>
+</p>
 
 > 🔄 Efficiently sync all your GitHub repositories locally with parallel processing support
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## ✨ Features
 
