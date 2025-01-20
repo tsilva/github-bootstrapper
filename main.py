@@ -1,14 +1,12 @@
-from github import Github
 from dotenv import load_dotenv
-import os
+load_dotenv()
+
 import sys
+import os
 import logging
 import requests
 import subprocess
 from typing import List, Dict, Any
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from config import Config
 
 # Configure logging
 logging.basicConfig(
@@ -20,16 +18,10 @@ logger = logging.getLogger(__name__)
 def get_repos(username: str) -> List[Dict[str, Any]]:
     """Get all repositories for a given username."""
     url = f"https://api.github.com/users/{username}/repos"
-    headers = {}
-    
-    # Use token if available for better rate limits
-    if github_token := os.getenv('GITHUB_TOKEN'):
-        headers['Authorization'] = f'token {github_token}'
-    
-    response = requests.get(url, headers=headers)
+    response = requests.get(url)
     
     if response.status_code == 403:
-        logger.error("GitHub API rate limit exceeded. Consider adding GITHUB_TOKEN to .env")
+        logger.error("GitHub API rate limit exceeded. Consider waiting or adding GITHUB_TOKEN")
         sys.exit(1)
     elif response.status_code != 200:
         raise Exception(f"Failed to get repositories: {response.status_code}")
@@ -92,30 +84,32 @@ def sync_repo(repo_url: str, repo_name: str, base_path: str) -> bool:
     
     return True
 
-def get_base_path(username: str) -> str:
-    """Get the base path for repositories."""
-    current_dir = Path(__file__).resolve().parent
-    return str(current_dir.parent / "repos" / username)
-
 def main():
-    # Load environment variables
-    load_dotenv()
+    # Validate environment variables
+    username = os.getenv('GITHUB_USERNAME')
+    if not username:
+        logger.error("GITHUB_USERNAME must be set in .env file")
+        sys.exit(1)
     
-    # Initialize GitHub client
-    token = os.getenv('GITHUB_TOKEN')
-    g = Github(token) if token else Github()
+    repos_dir = os.getenv('REPOS_BASE_DIR')
+    if not repos_dir:
+        logger.error("REPOS_BASE_DIR must be set in .env file")
+        sys.exit(1)
     
-    # Get authenticated user
-    user = g.get_user()
-    print(f"Logged in as: {user.login}")
+    if not os.path.isdir(repos_dir):
+        logger.error(f"REPOS_BASE_DIR '{repos_dir}' does not exist or is not a directory")
+        sys.exit(1)
     
-    # List all repositories
-    for repo in user.get_repos():
-        print(f"Repository: {repo.full_name}")
-        print(f"- URL: {repo.html_url}")
-        print(f"- Description: {repo.description}")
-        print(f"- Stars: {repo.stargazers_count}")
-        print("---")
+    # Fetch and process repositories
+    repos = get_repos(username)
+    for repo in repos:
+        logger.info(f"Repository: {repo['full_name']}")
+        logger.info(f"- URL: {repo['html_url']}")
+        logger.info(f"- Description: {repo['description']}")
+        logger.info("---")
+        
+        # Sync repository
+        sync_repo(repo['clone_url'], repo['name'], repos_dir)
 
 if __name__ == "__main__":
     main()
