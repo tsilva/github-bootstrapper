@@ -132,10 +132,9 @@ def has_unstaged_changes(repo_path: str) -> bool:
 
 def get_clone_url(repo: Dict[str, Any]) -> str:
     """Get the appropriate clone URL based on token availability."""
-    if token := os.getenv('GITHUB_TOKEN'):
-        # Use HTTPS URL with token for authentication
-        base_url = repo['clone_url'].replace('https://', '')
-        return f'https://{token}@{base_url}'
+    if os.getenv('GITHUB_TOKEN'):
+        # Use git protocol when token is available
+        return repo['ssh_url']
     return repo['clone_url']
 
 def sync_repo(repo_url: str, repo_name: str, base_path: str) -> bool:
