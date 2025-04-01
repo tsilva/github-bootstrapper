@@ -21,7 +21,7 @@
 ## ⚙️ Setup
 
 ```bash
-git clone https://github.com/tsilva/popdesk.git
+git clone https://github.com/tsilva/github-bootstrapper.git
 cd github-bootstrapper
 curl -L https://gist.githubusercontent.com/tsilva/258374c1ba2296d8ba22fffbf640f183/raw/venv-install.sh -o install.sh && chmod +x install.sh && ./install.sh
 ```
