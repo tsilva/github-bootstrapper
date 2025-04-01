@@ -18,20 +18,17 @@
 - 🏢 Support for organization repositories
 - ⚠️ Unstaged changes detection
 
-## 🛠️ Installation
+## ⚙️ Setup
 
-1. Clone this repository:
-   ```sh
-   git clone https://github.com/yourusername/github-bootstrapper.git
-   ```
-2. Navigate to the project directory:
-   ```sh
-   cd github-bootstrapper
-   ```
-3. Install required packages:
-   ```sh
-   pip install -r requirements.txt
-   ```
+```bash
+git clone https://github.com/tsilva/popdesk.git
+cd github-bootstrapper
+curl -L https://gist.githubusercontent.com/tsilva/258374c1ba2296d8ba22fffbf640f183/raw/venv-install.sh -o install.sh && chmod +x install.sh && ./install.sh
+```
+
+```bash
+curl -L https://gist.githubusercontent.com/tsilva/8588cb367242e3db8f1b33c42e4e5e06/raw/venv-run.sh -o run.sh && chmod +x run.sh && ./run.sh
+```
 
 ## ⚙️ Configuration
 
