@@ -16,6 +16,7 @@ class StatusOperation(Operation):
     description = "Report repository synchronization status"
     requires_token = False
     safe_parallel = True
+    show_progress_only = True  # Show progress bar instead of individual logs
 
     def __init__(self, base_dir: str, dry_run: bool = False, fetch: bool = True, clone_url_getter=None):
         """Initialize status operation.
@@ -56,7 +57,6 @@ class StatusOperation(Operation):
 
         # Handle dry run
         if self.dry_run:
-            logger.info(f"[DRY RUN] Would check status for {repo_name}")
             message = "Dry run: Would check status"
             return OperationResult(
                 status=OperationStatus.SUCCESS,
@@ -107,7 +107,6 @@ class StatusOperation(Operation):
             message = "In sync"
             self.categories[message].append(repo_full_name)
 
-        logger.info(f"{repo_name}: {message}")
         return OperationResult(
             status=OperationStatus.SUCCESS,
             message=message,

@@ -45,6 +45,7 @@ class Operation(ABC):
     description: str = "Base operation"
     requires_token: bool = False
     safe_parallel: bool = True
+    show_progress_only: bool = False  # If True, show progress bar instead of individual logs
 
     def __init__(self, base_dir: str, dry_run: bool = False, **kwargs):
         """Initialize operation.

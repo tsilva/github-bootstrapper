@@ -2,11 +2,12 @@
 
 import logging
 import multiprocessing
-from typing import List, Dict, Any, Type
+from typing import List, Dict, Any, Type, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .github_client import GitHubClient
 from ..operations.base import Operation, OperationResult
+from ..utils.progress import ProgressTracker
 
 logger = logging.getLogger('github_bootstrapper')
 
@@ -72,6 +73,11 @@ class RepoManager:
         # Call pre-batch hook
         operation.pre_batch_hook(repos)
 
+        # Create progress tracker if needed
+        progress_tracker = None
+        if operation.show_progress_only:
+            progress_tracker = ProgressTracker(len(repos), operation.name)
+
         # Determine processing mode
         use_parallel = (
             not self.sequential and
@@ -80,10 +86,14 @@ class RepoManager:
 
         if use_parallel:
             logger.info(f"Using parallel processing with {self.max_workers} workers")
-            results = self._execute_parallel(operation, repos)
+            results = self._execute_parallel(operation, repos, progress_tracker)
         else:
             logger.info("Using sequential processing")
-            results = self._execute_sequential(operation, repos)
+            results = self._execute_sequential(operation, repos, progress_tracker)
+
+        # Finish progress tracker
+        if progress_tracker:
+            progress_tracker.finish()
 
         # Call post-batch hook
         operation.post_batch_hook(results)
@@ -93,13 +103,15 @@ class RepoManager:
     def _execute_parallel(
         self,
         operation: Operation,
-        repos: List[Dict[str, Any]]
+        repos: List[Dict[str, Any]],
+        progress_tracker: Optional[ProgressTracker] = None
     ) -> List[OperationResult]:
         """Execute operation in parallel.
 
         Args:
             operation: Operation instance
             repos: List of repositories
+            progress_tracker: Optional progress tracker for progress display
 
         Returns:
             List of operation results
@@ -117,21 +129,26 @@ class RepoManager:
                 result = future.result()
                 results.append(result)
 
-                # Log result
-                self._log_result(result)
+                # Update progress or log result
+                if progress_tracker:
+                    progress_tracker.update(result)
+                else:
+                    self._log_result(result)
 
         return results
 
     def _execute_sequential(
         self,
         operation: Operation,
-        repos: List[Dict[str, Any]]
+        repos: List[Dict[str, Any]],
+        progress_tracker: Optional[ProgressTracker] = None
     ) -> List[OperationResult]:
         """Execute operation sequentially.
 
         Args:
             operation: Operation instance
             repos: List of repositories
+            progress_tracker: Optional progress tracker for progress display
 
         Returns:
             List of operation results
@@ -141,8 +158,11 @@ class RepoManager:
             result = self._process_repo(operation, repo)
             results.append(result)
 
-            # Log result
-            self._log_result(result)
+            # Update progress or log result
+            if progress_tracker:
+                progress_tracker.update(result)
+            else:
+                self._log_result(result)
 
         return results
 
@@ -160,13 +180,14 @@ class RepoManager:
         Returns:
             Operation result
         """
-        # Log repository info
-        logger.info(f"Repository: {repo['full_name']}")
-        logger.info(f"  URL: {repo['html_url']}")
-        logger.info(f"  Private: {repo['private']}")
-        if repo.get('description'):
-            logger.info(f"  Description: {repo['description']}")
-        logger.info("---")
+        # Log repository info (unless using progress-only mode)
+        if not operation.show_progress_only:
+            logger.info(f"Repository: {repo['full_name']}")
+            logger.info(f"  URL: {repo['html_url']}")
+            logger.info(f"  Private: {repo['private']}")
+            if repo.get('description'):
+                logger.info(f"  Description: {repo['description']}")
+            logger.info("---")
 
         # Get repo path
         repo_path = operation.get_repo_path(repo)
