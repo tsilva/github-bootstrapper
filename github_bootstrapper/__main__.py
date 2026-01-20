@@ -8,13 +8,13 @@ import argparse
 import logging
 from typing import List, Optional
 
-from config import Config
-from github_bootstrapper.core.logger import setup_logging
-from github_bootstrapper.core.github_client import GitHubClient
-from github_bootstrapper.core.repo_manager import RepoManager
-from github_bootstrapper.operations.registry import registry
-from github_bootstrapper.utils.filters import RepoFilter
-from github_bootstrapper.utils.progress import print_summary
+from .config import Config
+from .core.logger import setup_logging
+from .core.github_client import GitHubClient
+from .core.repo_manager import RepoManager
+from .operations.registry import registry
+from .utils.filters import RepoFilter
+from .utils.progress import print_summary
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -98,7 +98,7 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     config_group = parser.add_argument_group('configuration')
     config_group.add_argument(
         '--repos-dir',
-        help='Base directory for repositories (overrides REPOS_BASE_DIR)'
+        help='Base directory for repositories (default: current directory, overrides REPOS_BASE_DIR)'
     )
     config_group.add_argument(
         '--username',

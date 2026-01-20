@@ -47,7 +47,7 @@ class Config:
         """
         # Merge with environment variables (CLI args take precedence)
         final_username = username or os.getenv('GITHUB_USERNAME')
-        final_repos_dir = repos_dir or os.getenv('REPOS_BASE_DIR')
+        final_repos_dir = repos_dir or os.getenv('REPOS_BASE_DIR') or os.getcwd()
         final_token = token or os.getenv('GITHUB_TOKEN')
 
         # Validate required fields
@@ -55,12 +55,6 @@ class Config:
             raise ValueError(
                 "GitHub username is required. "
                 "Set GITHUB_USERNAME in .env or use --username"
-            )
-
-        if not final_repos_dir:
-            raise ValueError(
-                "Repository base directory is required. "
-                "Set REPOS_BASE_DIR in .env or use --repos-dir"
             )
 
         if not os.path.isdir(final_repos_dir):

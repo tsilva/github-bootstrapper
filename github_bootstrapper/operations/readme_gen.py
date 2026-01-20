@@ -22,7 +22,8 @@ class ReadmeGenOperation(Operation):
         self,
         base_dir: str,
         dry_run: bool = False,
-        force: bool = False
+        force: bool = False,
+        clone_url_getter=None
     ):
         """Initialize readme-gen operation.
 
@@ -30,6 +31,7 @@ class ReadmeGenOperation(Operation):
             base_dir: Base directory for repositories
             dry_run: If True, don't actually execute operations
             force: If True, regenerate even if README exists
+            clone_url_getter: Ignored (for compatibility with operation framework)
         """
         super().__init__(base_dir, dry_run)
         self.force = force

@@ -25,7 +25,7 @@ Perfect for developers managing dozens (or hundreds) of repositories who want to
 
 ## Features
 
-- **6 Powerful Operations** - sync, clone-only, pull-only, readme-gen, sandbox-enable, settings-clean
+- **7 Powerful Operations** - sync, clone-only, pull-only, status, readme-gen, sandbox-enable, settings-clean
 - **Parallel Processing** - utilize all CPU cores for thread-safe operations (when authenticated)
 - **Flexible Filtering** - target repos by name, org, pattern, visibility, or exclude forks/archived
 - **Dry-Run Mode** - preview changes before executing
@@ -39,6 +39,23 @@ Perfect for developers managing dozens (or hundreds) of repositories who want to
 
 ### Installation
 
+**Option 1: Global Installation (Recommended)**
+
+Install once, run from anywhere:
+
+```bash
+# Clone and install globally
+git clone https://github.com/tsilva/github-bootstrapper.git
+cd github-bootstrapper
+uv tool install .
+
+# Now run from any directory containing your repos
+cd ~/repos/your-username
+github-bootstrapper status --username your-username
+```
+
+**Option 2: Local Installation**
+
 ```bash
 # Clone the repository
 git clone https://github.com/tsilva/github-bootstrapper.git
@@ -46,15 +63,25 @@ cd github-bootstrapper
 
 # Install dependencies
 uv sync
+
+# Run with uv
+uv run github-bootstrapper sync
 ```
 
 ### Configuration
 
-Create a `.env` file (use `.env.example` as template):
+**Global Installation:** Run from your repos directory with `--username`:
+
+```bash
+cd ~/repos/your-username
+github-bootstrapper sync --username your-username
+```
+
+**Local Installation:** Create a `.env` file (use `.env.example` as template):
 
 ```env
 GITHUB_USERNAME=your_github_username
-REPOS_BASE_DIR=/path/to/your/repos/directory
+REPOS_BASE_DIR=/path/to/your/repos/directory  # Defaults to current directory
 GITHUB_TOKEN=your_github_token  # Optional but recommended
 ```
 
@@ -65,11 +92,16 @@ GITHUB_TOKEN=your_github_token  # Optional but recommended
 
 ### First Run
 
+**Global Installation:**
 ```bash
-# Preview what would be synced
-uv run github-bootstrapper sync --dry-run
+cd ~/repos/your-username
+github-bootstrapper sync --username your-username --dry-run
+github-bootstrapper sync --username your-username
+```
 
-# Sync all repositories (clone + pull)
+**Local Installation:**
+```bash
+uv run github-bootstrapper sync --dry-run
 uv run github-bootstrapper sync
 ```
 
@@ -137,7 +169,30 @@ uv run github-bootstrapper pull-only --workers 8
 
 ---
 
-### 4. readme-gen
+### 4. status
+
+Report synchronization status of all repositories.
+
+```bash
+# Check status of all repos
+github-bootstrapper status --username your-username
+
+# Check specific repos
+github-bootstrapper status --username your-username --repo repo1 --repo repo2
+
+# Check only private repos
+github-bootstrapper status --username your-username --private-only
+```
+
+**Behavior:**
+- Categorizes repos: In sync, Unpushed changes, Unpulled changes, Diverged, Uncommitted changes, Not cloned
+- Fetches from remote for accurate status
+- Provides grouped summary output
+- Thread-safe parallel execution
+
+---
+
+### 5. readme-gen
 
 Generate or update README.md using Claude's readme-generator skill.
 
@@ -164,7 +219,7 @@ uv run github-bootstrapper readme-gen --exclude-forks
 
 ---
 
-### 5. sandbox-enable
+### 6. sandbox-enable
 
 Enable Claude Code sandbox mode with auto-allow bash for all repos.
 
@@ -184,7 +239,7 @@ uv run github-bootstrapper sandbox-enable --repo repo1 --repo repo2
 
 ---
 
-### 6. settings-clean
+### 7. settings-clean
 
 Analyze and clean Claude Code permission whitelists.
 
@@ -240,53 +295,74 @@ uv run github-bootstrapper pull-only --repo web-app --repo api-server
 
 ## Examples
 
+> **Note:** Examples show global installation commands. For local installation, prefix with `uv run`.
+
 ### Daily Workflow
 
 ```bash
+# Navigate to your repos directory
+cd ~/repos/your-username
+
 # Morning: update all repos
-uv run github-bootstrapper pull-only
+github-bootstrapper pull-only --username your-username
 
 # Check what's new (dry-run)
-uv run github-bootstrapper clone-only --dry-run
+github-bootstrapper clone-only --username your-username --dry-run
 
 # Clone any new repos
-uv run github-bootstrapper clone-only
+github-bootstrapper clone-only --username your-username
+```
+
+### Check Repository Status
+
+```bash
+# See sync status of all repos
+github-bootstrapper status --username your-username
+
+# Check specific repos
+github-bootstrapper status --username your-username --repo project1 --repo project2
+
+# Check only private repos
+github-bootstrapper status --username your-username --private-only
 ```
 
 ### Bulk Configuration
 
 ```bash
 # Enable sandbox mode everywhere
-uv run github-bootstrapper sandbox-enable
+github-bootstrapper sandbox-enable --username your-username
 
 # Analyze all Claude settings
-uv run github-bootstrapper settings-clean --mode analyze
+github-bootstrapper settings-clean --username your-username --mode analyze
 
 # Auto-fix issues in settings
-uv run github-bootstrapper settings-clean --mode auto-fix
+github-bootstrapper settings-clean --username your-username --mode auto-fix
 ```
 
 ### Documentation Sprint
 
 ```bash
 # Generate READMEs for all personal projects (excluding forks)
-uv run github-bootstrapper readme-gen --exclude-forks --exclude-archived
+github-bootstrapper readme-gen --username your-username --exclude-forks --exclude-archived
 
 # Force regenerate for specific repos
-uv run github-bootstrapper readme-gen --force --repo my-main-project
+github-bootstrapper readme-gen --username your-username --force --repo my-main-project
 ```
 
 ### Fresh Machine Setup
 
 ```bash
+# Navigate to where you want your repos
+cd ~/repos/your-username
+
 # Clone all your repos
-uv run github-bootstrapper clone-only
+github-bootstrapper clone-only --username your-username
 
 # Enable sandbox mode for all
-uv run github-bootstrapper sandbox-enable
+github-bootstrapper sandbox-enable --username your-username
 
 # Generate missing READMEs
-uv run github-bootstrapper readme-gen
+github-bootstrapper readme-gen --username your-username
 ```
 
 ## Global Options

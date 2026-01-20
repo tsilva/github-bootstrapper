@@ -22,7 +22,8 @@ class SettingsCleanOperation(Operation):
         self,
         base_dir: str,
         dry_run: bool = False,
-        mode: str = "analyze"
+        mode: str = "analyze",
+        clone_url_getter=None
     ):
         """Initialize settings-clean operation.
 
@@ -30,6 +31,7 @@ class SettingsCleanOperation(Operation):
             base_dir: Base directory for repositories
             dry_run: If True, don't actually execute operations
             mode: Operation mode (analyze, clean, auto-fix)
+            clone_url_getter: Ignored (for compatibility with operation framework)
         """
         super().__init__(base_dir, dry_run)
         self.mode = mode

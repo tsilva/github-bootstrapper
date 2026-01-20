@@ -4,41 +4,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports six operations: sync (clone + pull), clone-only, pull-only, readme-gen (README generation via Claude), settings-clean (Claude Code settings cleanup), and sandbox-enable (enable Claude Code sandbox mode). Features include parallel processing, flexible filtering, and an extensible operation framework.
+GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports seven operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), readme-gen (README generation via Claude), settings-clean (Claude Code settings cleanup), and sandbox-enable (enable Claude Code sandbox mode). Features include parallel processing, flexible filtering, and an extensible operation framework.
 
 ## Development Setup
 
-This project uses `uv` for dependency management. Install dependencies:
+This project uses `uv` for dependency management.
+
+**For local development:**
 ```bash
 uv sync
+```
+
+**For global installation:**
+```bash
+uv tool install .
 ```
 
 Create a `.env` file (use `.env.example` as template):
 ```
 GITHUB_USERNAME=your_github_username
-REPOS_BASE_DIR=/path/to/your/repos/directory
+REPOS_BASE_DIR=/path/to/your/repos/directory  # Defaults to current directory
 GITHUB_TOKEN=your_github_token  # Optional but recommended
 ```
 
-Run operations:
+Run operations (examples use global installation; for local dev, prefix with `uv run`):
 ```bash
+# Check repository status
+github-bootstrapper status --username your-username
+
 # Sync all repositories
-uv run github-bootstrapper sync
+github-bootstrapper sync --username your-username
 
 # Clone only missing repositories
-uv run github-bootstrapper clone-only --dry-run
+github-bootstrapper clone-only --username your-username --dry-run
 
 # Pull updates for existing repositories
-uv run github-bootstrapper pull-only
+github-bootstrapper pull-only --username your-username
 
 # Generate READMEs
-uv run github-bootstrapper readme-gen --exclude-forks
+github-bootstrapper readme-gen --username your-username --exclude-forks
 
 # Enable sandbox mode
-uv run github-bootstrapper sandbox-enable
+github-bootstrapper sandbox-enable --username your-username
 
 # Clean Claude settings
-uv run github-bootstrapper settings-clean --mode analyze
+github-bootstrapper settings-clean --username your-username --mode analyze
 ```
 
 ## Architecture
@@ -47,9 +57,9 @@ uv run github-bootstrapper settings-clean --mode analyze
 
 ```
 github-bootstrapper/
-├── main.py                          # CLI entry point with argparse
-├── config.py                        # Configuration management
 ├── github_bootstrapper/             # Core package
+│   ├── __main__.py                 # CLI entry point with argparse
+│   ├── config.py                   # Configuration management
 │   ├── core/
 │   │   ├── github_client.py        # GitHub API client
 │   │   ├── repo_manager.py         # Operation orchestrator
@@ -60,6 +70,7 @@ github-bootstrapper/
 │   │   ├── sync.py                 # Clone + pull operation
 │   │   ├── clone_only.py           # Clone-only operation
 │   │   ├── pull_only.py            # Pull-only operation
+│   │   ├── status.py               # Repository status operation
 │   │   ├── readme_gen.py           # README generation via Claude CLI
 │   │   ├── settings_clean.py       # Settings cleanup via script
 │   │   └── sandbox_enable.py       # Sandbox mode enablement
@@ -67,6 +78,8 @@ github-bootstrapper/
 │       ├── git.py                  # Git helpers
 │       ├── progress.py             # Progress tracking
 │       └── filters.py              # Repository filtering
+├── pyproject.toml                  # Package configuration
+└── uv.lock                         # Dependency lock file
 ```
 
 ### Operation Framework
@@ -129,19 +142,25 @@ github-bootstrapper/
    - Parallelization: Yes (thread-safe)
    - Skips repos with unstaged changes
 
-4. **readme-gen** - Generate/update README.md using Claude's readme-generator skill
+4. **status** - Report repository synchronization status
+   - Parallelization: Yes (read-only operation)
+   - Categorizes repos: In sync, Unpushed changes, Unpulled changes, Diverged, Uncommitted changes, Not cloned
+   - Fetches from remote to ensure accurate status
+   - Provides grouped summary output
+
+5. **readme-gen** - Generate/update README.md using Claude's readme-generator skill
    - Parallelization: No (Claude API rate limits)
    - Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits`
    - Skips archived and fork repos by default
    - Timeout: 5 minutes per repo
 
-5. **settings-clean** - Analyze/clean Claude Code settings
+6. **settings-clean** - Analyze/clean Claude Code settings
    - Parallelization: Yes (isolated settings files)
    - Invokes settings-cleaner script via `uv run`
    - Modes: analyze (default), clean, auto-fix
    - Skips repos without `.claude/settings.local.json`
 
-6. **sandbox-enable** - Enable Claude Code sandbox mode
+7. **sandbox-enable** - Enable Claude Code sandbox mode
    - Parallelization: Yes (isolated JSON files)
    - Direct JSON manipulation
    - Sets: `{"sandbox": {"enabled": true, "autoAllowBashIfSandboxed": true}}`

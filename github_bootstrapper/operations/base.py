@@ -46,12 +46,13 @@ class Operation(ABC):
     requires_token: bool = False
     safe_parallel: bool = True
 
-    def __init__(self, base_dir: str, dry_run: bool = False):
+    def __init__(self, base_dir: str, dry_run: bool = False, **kwargs):
         """Initialize operation.
 
         Args:
             base_dir: Base directory for repositories
             dry_run: If True, don't actually execute operations
+            **kwargs: Additional operation-specific parameters (ignored by base class)
         """
         self.base_dir = base_dir
         self.dry_run = dry_run
