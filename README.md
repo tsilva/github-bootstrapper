@@ -1,175 +1,458 @@
 <div align="center">
   <img src="logo.png" alt="github-bootstrapper" width="280"/>
 
-  [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-  [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+  [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/tsilva/github-bootstrapper)
+  [![Python](https://img.shields.io/badge/python-3.8+-blue)](https://www.python.org/)
+  [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+  [![uv](https://img.shields.io/badge/uv-enabled-blueviolet)](https://github.com/astral-sh/uv)
 
-  **Sync all your GitHub repositories locally with parallel processing and smart change detection**
+  **Bulk repository operations powered by parallel processing - sync, clone, pull, and automate Claude Code workflows across all your GitHub repos**
 
+  [Quick Start](#quick-start) · [Operations](#operations) · [Examples](#examples)
 </div>
+
+---
 
 ## Overview
 
-GitHub Bootstrapper efficiently syncs all your GitHub repositories to your local machine. It automatically discovers repositories (including those in organizations), clones missing ones, and updates existing ones. With GitHub token support, it accesses private repositories and uses parallel processing for blazing-fast syncing.
+github-bootstrapper is a multi-operation CLI that manages your entire GitHub repository portfolio. Clone missing repos, pull updates, generate READMEs with Claude, enable sandbox mode, and clean settings - all with parallel processing and intelligent filtering.
+
+Perfect for developers managing dozens (or hundreds) of repositories who want to:
+- Keep local checkouts in sync without manual git commands
+- Apply consistent configurations across all projects
+- Automate documentation and settings management
+- Filter operations by org, visibility, patterns, or specific repos
 
 ## Features
 
-- **Complete Repository Discovery** - Automatically finds all accessible repositories (public, private, and organization repos)
-- **Parallel Processing** - When authenticated with a GitHub token, syncs multiple repositories concurrently using all CPU cores
-- **Smart Change Detection** - Skips repositories with unstaged changes to prevent data loss
-- **Detailed Logging** - Timestamped logs in the `logs/` directory for every sync session
-- **Token-Aware Cloning** - Uses SSH URLs when token is available, HTTPS otherwise
+- **6 Powerful Operations** - sync, clone-only, pull-only, readme-gen, sandbox-enable, settings-clean
+- **Parallel Processing** - utilize all CPU cores for thread-safe operations (when authenticated)
+- **Flexible Filtering** - target repos by name, org, pattern, visibility, or exclude forks/archived
+- **Dry-Run Mode** - preview changes before executing
+- **Claude Integration** - generate READMEs and clean settings using Claude Code skills
+- **Smart Safety** - automatically skips repos with unstaged changes during pull operations
+- **Authenticated & Unauthenticated Modes** - SSH URLs with token, HTTPS without
+- **Live Progress** - visual progress bar with success/skip/fail counts
+- **Operation Framework** - extensible architecture makes adding new operations trivial
 
 ## Quick Start
 
-Install with `uv`:
-
-```bash
-git clone https://github.com/tsilva/github-bootstrapper.git
-cd github-bootstrapper
-uv sync
-```
-
-Create a `.env` file:
-
-```bash
-cp .env.example .env
-# Edit .env with your settings
-```
-
-Run the sync:
-
-```bash
-uv run python main.py
-```
-
-## Installation
-
-### Using uv (Recommended)
-
-[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver.
+### Installation
 
 ```bash
 # Clone the repository
 git clone https://github.com/tsilva/github-bootstrapper.git
 cd github-bootstrapper
 
-# Install dependencies with uv
+# Install dependencies
 uv sync
 ```
 
-### Traditional Method
+### Configuration
+
+Create a `.env` file (use `.env.example` as template):
+
+```env
+GITHUB_USERNAME=your_github_username
+REPOS_BASE_DIR=/path/to/your/repos/directory
+GITHUB_TOKEN=your_github_token  # Optional but recommended
+```
+
+**Why provide a token?**
+- Access private and organization repositories
+- Enable parallel processing (faster operations)
+- Use SSH URLs for cloning (no password prompts)
+
+### First Run
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+# Preview what would be synced
+uv run github-bootstrapper sync --dry-run
+
+# Sync all repositories (clone + pull)
+uv run github-bootstrapper sync
 ```
 
-## Configuration
+## Operations
 
-Create a `.env` file in the project root (copy from `.env.example`):
+### 1. sync
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GITHUB_USERNAME` | Yes | Your GitHub username |
-| `REPOS_BASE_DIR` | Yes | Directory where repositories will be cloned/synced |
-| `GITHUB_TOKEN` | No | GitHub personal access token (enables private repos + parallel processing) |
-
-**Example `.env`:**
+Clone new repositories and pull updates for existing ones.
 
 ```bash
-GITHUB_USERNAME=tsilva
-REPOS_BASE_DIR=/Users/tsilva/repos
-GITHUB_TOKEN=ghp_your_token_here  # Optional but recommended
+# Sync all repos
+uv run github-bootstrapper sync
+
+# Dry-run to preview
+uv run github-bootstrapper sync --dry-run
+
+# Sync only private repos from a specific org
+uv run github-bootstrapper sync --org mycompany --private-only
 ```
 
-### GitHub Token Setup
+**Behavior:**
+- Clones repos that don't exist locally
+- Pulls updates for repos that exist
+- Skips repos with unstaged changes
+- Thread-safe parallel execution
 
-A GitHub token is optional but highly recommended. It provides:
-- Access to private repositories
-- Parallel processing (much faster syncing)
-- Higher API rate limits
-- SSH clone URLs (more secure)
+---
 
-[Create a GitHub token](https://github.com/settings/tokens) with `repo` scope.
+### 2. clone-only
 
-## Usage
-
-### Basic Usage
+Clone repositories that don't exist locally (skip existing).
 
 ```bash
-# Using uv
-uv run python main.py
+# Clone all missing repos
+uv run github-bootstrapper clone-only
 
-# Or activate virtual environment first
-source .venv/bin/activate  # uv creates .venv by default
-python main.py
+# Clone only repos matching pattern
+uv run github-bootstrapper clone-only --pattern "my-*"
 ```
 
-### What Happens During Sync
+**Behavior:**
+- Only clones missing repositories
+- Skips repos that already exist
+- Thread-safe parallel execution
 
-1. **Discovery** - Fetches all accessible repositories via GitHub API
-2. **Clone** - Clones any repositories not present locally
-3. **Update** - Pulls latest changes for existing repositories
-4. **Safety** - Skips repositories with unstaged changes
-5. **Logging** - Creates detailed logs in `logs/github_sync_YYYYMMDD_HHMMSS.log`
+---
 
-### Processing Modes
+### 3. pull-only
 
-| Mode | Trigger | Speed | Clone Method |
-|------|---------|-------|--------------|
-| **Parallel** | `GITHUB_TOKEN` set | Fast (uses all CPU cores) | SSH URLs |
-| **Sequential** | No token | Slower (one-by-one) | HTTPS URLs |
+Pull updates for repositories that exist locally (skip missing).
 
-## How It Works
+```bash
+# Pull updates for all existing repos
+uv run github-bootstrapper pull-only
 
-### Architecture
-
-- **Authenticated Mode** (with token): Uses `/user/repos` endpoint to fetch all repositories (public + private + org repos) in a single paginated request, then processes them in parallel using `ThreadPoolExecutor`
-
-- **Unauthenticated Mode** (without token): Uses `/users/{username}/repos` for public repositories, fetches organization memberships separately, then processes sequentially
-
-### Safety Features
-
-- **Unstaged Change Detection**: Repositories with uncommitted changes are automatically skipped to prevent data loss
-- **Deduplication**: Repositories are deduplicated by ID to handle overlaps between user and organization repos
-- **Branch Awareness**: Detects the current branch before pulling (doesn't assume `main` or `master`)
-
-## Logs
-
-Every sync session creates a timestamped log file:
-
-```
-logs/
-├── github_sync_20260120_143022.log
-├── github_sync_20260120_150145.log
-└── github_sync_20260120_153301.log
+# Use 8 parallel workers
+uv run github-bootstrapper pull-only --workers 8
 ```
 
-Logs include:
-- Repository discovery details
-- Clone/pull operations
-- Skipped repositories (with reasons)
-- Error messages with full context
+**Behavior:**
+- Only pulls existing repositories
+- Skips repos that don't exist locally
+- Skips repos with unstaged changes
+- Thread-safe parallel execution
+
+---
+
+### 4. readme-gen
+
+Generate or update README.md using Claude's readme-generator skill.
+
+```bash
+# Generate READMEs for repos without one
+uv run github-bootstrapper readme-gen
+
+# Force regenerate even if README exists
+uv run github-bootstrapper readme-gen --force
+
+# Generate only for non-fork repos
+uv run github-bootstrapper readme-gen --exclude-forks
+```
+
+**Behavior:**
+- Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits`
+- Skips archived and fork repos by default
+- Sequential execution (Claude API rate limits)
+- 5-minute timeout per repository
+
+**Requirements:**
+- Claude Code CLI installed and authenticated
+- readme-generator skill available
+
+---
+
+### 5. sandbox-enable
+
+Enable Claude Code sandbox mode with auto-allow bash for all repos.
+
+```bash
+# Enable sandbox for all repos
+uv run github-bootstrapper sandbox-enable
+
+# Enable for specific repos
+uv run github-bootstrapper sandbox-enable --repo repo1 --repo repo2
+```
+
+**Behavior:**
+- Creates or updates `.claude/settings.local.json`
+- Sets: `{"sandbox": {"enabled": true, "autoAllowBashIfSandboxed": true}}`
+- Preserves existing settings
+- Thread-safe parallel execution
+
+---
+
+### 6. settings-clean
+
+Analyze and clean Claude Code permission whitelists.
+
+```bash
+# Analyze settings (default mode)
+uv run github-bootstrapper settings-clean
+
+# Clean settings interactively
+uv run github-bootstrapper settings-clean --mode clean
+
+# Auto-fix issues
+uv run github-bootstrapper settings-clean --mode auto-fix
+```
+
+**Behavior:**
+- Invokes settings-cleaner script via `uv run`
+- Modes: analyze, clean, auto-fix
+- Skips repos without `.claude/settings.local.json`
+- Thread-safe parallel execution
+
+**Requirements:**
+- settings-cleaner skill installed
+
+## Filtering
+
+All operations support powerful filtering options:
+
+| Filter | Description | Example |
+|--------|-------------|---------|
+| `--repo NAME` | Target specific repo(s) | `--repo my-app --repo another-app` |
+| `--org NAME` | Filter by organization | `--org mycompany --org otherorg` |
+| `--pattern GLOB` | Filter by name pattern | `--pattern "web-*"` |
+| `--exclude-forks` | Exclude forked repos | `--exclude-forks` |
+| `--exclude-archived` | Exclude archived repos | `--exclude-archived` |
+| `--private-only` | Only private repos | `--private-only` |
+| `--public-only` | Only public repos | `--public-only` |
+
+### Filter Examples
+
+```bash
+# Sync only private repos from your company
+uv run github-bootstrapper sync --org mycompany --private-only
+
+# Generate READMEs for your personal projects (exclude forks)
+uv run github-bootstrapper readme-gen --pattern "my-*" --exclude-forks
+
+# Enable sandbox only for active development repos
+uv run github-bootstrapper sandbox-enable --exclude-archived
+
+# Pull updates for specific repos
+uv run github-bootstrapper pull-only --repo web-app --repo api-server
+```
+
+## Examples
+
+### Daily Workflow
+
+```bash
+# Morning: update all repos
+uv run github-bootstrapper pull-only
+
+# Check what's new (dry-run)
+uv run github-bootstrapper clone-only --dry-run
+
+# Clone any new repos
+uv run github-bootstrapper clone-only
+```
+
+### Bulk Configuration
+
+```bash
+# Enable sandbox mode everywhere
+uv run github-bootstrapper sandbox-enable
+
+# Analyze all Claude settings
+uv run github-bootstrapper settings-clean --mode analyze
+
+# Auto-fix issues in settings
+uv run github-bootstrapper settings-clean --mode auto-fix
+```
+
+### Documentation Sprint
+
+```bash
+# Generate READMEs for all personal projects (excluding forks)
+uv run github-bootstrapper readme-gen --exclude-forks --exclude-archived
+
+# Force regenerate for specific repos
+uv run github-bootstrapper readme-gen --force --repo my-main-project
+```
+
+### Fresh Machine Setup
+
+```bash
+# Clone all your repos
+uv run github-bootstrapper clone-only
+
+# Enable sandbox mode for all
+uv run github-bootstrapper sandbox-enable
+
+# Generate missing READMEs
+uv run github-bootstrapper readme-gen
+```
+
+## Global Options
+
+All operations support these flags:
+
+| Flag | Description |
+|------|-------------|
+| `--repos-dir PATH` | Override REPOS_BASE_DIR |
+| `--username USER` | Override GITHUB_USERNAME |
+| `--token TOKEN` | Override GITHUB_TOKEN |
+| `--workers N` | Number of parallel workers (default: CPU count) |
+| `--sequential` | Force sequential processing |
+| `--dry-run` | Preview without executing |
+
+## Architecture
+
+github-bootstrapper uses an extensible **Operation Framework** based on the Strategy Pattern:
+
+```
+github_bootstrapper/
+├── core/
+│   ├── github_client.py    # GitHub API with pagination
+│   ├── repo_manager.py     # Orchestrates operations
+│   └── logger.py           # Operation-specific logging
+├── operations/
+│   ├── base.py             # Abstract Operation class
+│   ├── registry.py         # Auto-discovery via introspection
+│   ├── sync.py             # Clone + pull
+│   ├── clone_only.py       # Clone missing
+│   ├── pull_only.py        # Pull existing
+│   ├── readme_gen.py       # README generation
+│   ├── settings_clean.py   # Settings cleanup
+│   └── sandbox_enable.py   # Sandbox enablement
+└── utils/
+    ├── git.py              # Git helpers
+    ├── filters.py          # Repository filtering
+    └── progress.py         # Progress tracking
+```
+
+### Adding New Operations
+
+Create a new operation in 3 steps:
+
+1. **Create file** in `operations/` directory
+2. **Inherit from Operation** base class
+3. **Implement `execute()` method**
+
+```python
+from .base import Operation, OperationResult, OperationStatus
+
+class MyOperation(Operation):
+    name = "my-op"
+    description = "Does something useful"
+    requires_token = False
+    safe_parallel = True
+
+    def execute(self, repo, repo_path):
+        # Your logic here
+        return OperationResult(
+            status=OperationStatus.SUCCESS,
+            message="Done!",
+            repo_name=repo['name'],
+            repo_full_name=repo['full_name']
+        )
+```
+
+The registry auto-discovers it - no other changes needed!
+
+## Authentication Modes
+
+### Authenticated Mode (Recommended)
+
+With a GitHub token:
+- ✅ Access private and organization repos
+- ✅ Parallel processing (faster)
+- ✅ SSH URLs (no password prompts)
+- ✅ Higher API rate limits
+
+```env
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+```
+
+### Unauthenticated Mode
+
+Without a token:
+- ⚠️ Public repos only
+- ⚠️ Sequential processing
+- ⚠️ HTTPS URLs (may prompt for credentials)
+- ⚠️ Lower API rate limits
+
+## Progress Tracking
+
+Operations display live progress with success/skip/fail counts:
+
+```
+[████████████████░░░░] 80% (40/50) ✓35 ⊘3 ✗2
+```
+
+**Legend:**
+- ✓ Success
+- ⊘ Skipped
+- ✗ Failed
+
+Final summary includes detailed failure messages:
+
+```
+============================================================
+SUMMARY: SYNC
+============================================================
+Total repositories: 50
+✓ Success: 35
+⊘ Skipped: 3
+✗ Failed: 2
+
+Failed repositories:
+  - user/broken-repo: Failed to pull changes
+  - user/archived-repo: Repository has unstaged changes
+============================================================
+```
 
 ## Requirements
 
-- Python 3.8 or higher
-- Git installed and accessible in PATH
-- Internet connection
-- (Optional) GitHub personal access token
+- Python 3.8+
+- uv (package manager)
+- git
+- GitHub account
+- Claude Code CLI (for readme-gen operation)
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! This project follows an extensible architecture that makes adding new operations straightforward.
+
+### Development Setup
+
+```bash
+# Clone and install
+git clone https://github.com/tsilva/github-bootstrapper.git
+cd github-bootstrapper
+uv sync
+
+# Run tests (if available)
+uv run pytest
+
+# Try your changes
+uv run github-bootstrapper --help
+```
+
+### Contribution Ideas
+
+- New operations (PR creation, dependency updates, license compliance)
+- Additional filters (by language, by activity, by size)
+- Enhanced progress tracking
+- Operation result export (JSON, CSV)
+- Configuration profiles
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 Tiago Silva
 
 ---
 
 <div align="center">
-Made with ❤️ by Tiago Silva
+  Made with ❤️ by developers who manage too many repos
+
+  If this helps you, please ⭐ star the repo!
 </div>

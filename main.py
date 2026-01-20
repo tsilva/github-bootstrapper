@@ -1,241 +1,284 @@
+"""Main entry point for GitHub Bootstrapper CLI."""
+
 from dotenv import load_dotenv
 load_dotenv()
 
 import sys
-import os
+import argparse
 import logging
-import requests
-import subprocess
-from typing import List, Dict, Any, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import multiprocessing
-from datetime import datetime
+from typing import List, Optional
 
-def setup_logging() -> None:
-    """Configure logging to both file and console."""
-    # Create logs directory if it doesn't exist
-    logs_dir = os.path.join(os.path.dirname(__file__), 'logs')
-    os.makedirs(logs_dir, exist_ok=True)
-    
-    # Create timestamp-based log filename
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    log_file = os.path.join(logs_dir, f'github_sync_{timestamp}.log')
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler(sys.stdout)
-        ]
+from config import Config
+from github_bootstrapper.core.logger import setup_logging
+from github_bootstrapper.core.github_client import GitHubClient
+from github_bootstrapper.core.repo_manager import RepoManager
+from github_bootstrapper.operations.registry import registry
+from github_bootstrapper.utils.filters import RepoFilter
+from github_bootstrapper.utils.progress import print_summary
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create CLI argument parser.
+
+    Returns:
+        Configured ArgumentParser
+    """
+    parser = argparse.ArgumentParser(
+        prog='github-bootstrapper',
+        description='Multi-operation GitHub repository manager',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Sync all repositories (clone + pull)
+  github-bootstrapper sync
+
+  # Clone only missing repositories
+  github-bootstrapper clone-only --dry-run
+
+  # Pull updates for existing repositories
+  github-bootstrapper pull-only --workers 8
+
+  # Generate READMEs for all repos
+  github-bootstrapper readme-gen --exclude-forks
+
+  # Enable sandbox mode for all repos
+  github-bootstrapper sandbox-enable
+
+  # Clean Claude settings
+  github-bootstrapper settings-clean --mode analyze
+
+  # Filter by organization
+  github-bootstrapper sync --org mycompany --private-only
+
+  # Filter by pattern
+  github-bootstrapper readme-gen --pattern "my-*"
+        """
     )
 
-# Configure logging
-setup_logging()
-logger = logging.getLogger(__name__)
-logger.info("Starting GitHub repository sync")
+    # Subcommands (operations)
+    subparsers = parser.add_subparsers(
+        dest='operation',
+        help='Operation to perform',
+        required=True
+    )
 
-def get_user_orgs(username: str, headers: dict) -> List[str]:
-    """Get all organizations for a user."""
-    url = f"https://api.github.com/users/{username}/orgs"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return [org['login'] for org in response.json()]
-    return []
-
-def get_org_repos(org: str, headers: dict) -> List[Dict[str, Any]]:
-    """Get all repositories for an organization."""
-    all_repos = []
-    page = 1
-    per_page = 100
-    
-    while True:
-        url = f"https://api.github.com/orgs/{org}/repos?page={page}&per_page={per_page}"
-        response = requests.get(url, headers=headers)
-        
-        if response.status_code != 200:
-            logger.warning(f"Failed to get repositories for org {org}: {response.status_code}")
-            break
-        
-        repos_page = response.json()
-        if not repos_page:
-            break
-            
-        all_repos.extend(repos_page)
-        page += 1
-    
-    return all_repos
-
-def get_repos(username: str) -> List[Dict[str, Any]]:
-    """Get all repositories for a given username, including org repos."""
-    headers = {}
-    if token := os.getenv('GITHUB_TOKEN'):
-        headers['Authorization'] = f'token {token}'
-        logger.info("Using GitHub token for authentication")
-        # When authenticated, use different endpoint to get ALL repos including private ones
-        url_template = "https://api.github.com/user/repos?page={}&per_page={}&affiliation=owner,collaborator,organization_member"
-    else:
-        # Unauthenticated - only public repos
-        url_template = f"https://api.github.com/users/{username}/repos?page={{}}&per_page={{}}"
-
-    # Get repos using selected endpoint
-    all_repos = []
-    page = 1
-    per_page = 100
-
-    while True:
-        url = url_template.format(page, per_page)
-        response = requests.get(url, headers=headers)
-        
-        if response.status_code == 403:
-            logger.error("GitHub API rate limit exceeded")
-            sys.exit(1)
-        elif response.status_code != 200:
-            raise Exception(f"Failed to get repositories: {response.status_code}")
-        
-        repos_page = response.json()
-        if not repos_page:
-            break
-            
-        all_repos.extend(repos_page)
-        page += 1
-
-    # No need to fetch org repos separately when using authenticated endpoint
-    if not headers:
-        # Only fetch org repos if not authenticated
-        orgs = get_user_orgs(username, headers)
-        logger.info(f"Found {len(orgs)} organizations")
-        
-        for org in orgs:
-            org_repos = get_org_repos(org, headers)
-            logger.info(f"Found {len(org_repos)} repositories in organization {org}")
-            all_repos.extend(org_repos)
-
-    # Deduplicate repos based on id
-    unique_repos = {repo['id']: repo for repo in all_repos}.values()
-    logger.info(f"Found {len(unique_repos)} unique repositories total")
-    return list(unique_repos)
-
-def has_unstaged_changes(repo_path: str) -> bool:
-    """Check if repository has unstaged changes."""
-    try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=repo_path,
-            capture_output=True,
-            text=True
+    # Dynamically add subcommands from registry
+    for op_name, op_class in registry.get_all_operations().items():
+        op_parser = subparsers.add_parser(
+            op_name,
+            help=op_class.description
         )
-        return bool(result.stdout.strip())
-    except subprocess.CalledProcessError:
-        return True
+        _add_common_args(op_parser)
 
-def get_clone_url(repo: Dict[str, Any]) -> str:
-    """Get the appropriate clone URL based on token availability."""
-    if os.getenv('GITHUB_TOKEN'):
-        # Use git protocol when token is available
-        return repo['ssh_url']
-    return repo['clone_url']
+        # Add operation-specific arguments
+        if op_name == 'readme-gen':
+            op_parser.add_argument(
+                '--force',
+                action='store_true',
+                help='Regenerate README even if it already exists'
+            )
+        elif op_name == 'settings-clean':
+            op_parser.add_argument(
+                '--mode',
+                choices=['analyze', 'clean', 'auto-fix'],
+                default='analyze',
+                help='Operation mode (default: analyze)'
+            )
 
-def sync_repo(repo_url: str, repo_name: str, base_path: str) -> bool:
-    """Sync a single repository."""
-    repo_path = os.path.join(base_path, repo_name)
-    
-    if os.path.exists(repo_path):
-        logger.info(f"Repository {repo_name} exists, checking status...")
-        if has_unstaged_changes(repo_path):
-            logger.warning(f"Skipping {repo_name} due to unstaged changes")
-            return False
-        
-        logger.info(f"Pulling latest changes for {repo_name}")
-        try:
-            # First try to get the default branch
-            result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            default_branch = result.stdout.strip()
-            
-            subprocess.run(
-                ["git", "pull", "origin", default_branch],
-                cwd=repo_path,
-                check=True
-            )
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to pull {repo_name}: {e}")
-            return False
-    else:
-        logger.info(f"Cloning {repo_name}...")
-        try:
-            subprocess.run(
-                ["git", "clone", repo_url, repo_path],
-                check=True
-            )
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to clone {repo_name}: {e}")
-            return False
-    
-    return True
+    return parser
 
-def process_repo(repo: Dict[str, Any], repos_dir: str) -> Tuple[str, bool]:
-    """Process a single repository and return its name and success status."""
-    name = repo['name']
-    logger.info(f"Repository: {repo['full_name']}")
-    logger.info(f"- URL: {repo['html_url']}")
-    logger.info(f"- Private: {repo['private']}")
-    logger.info(f"- Description: {repo['description']}")
-    logger.info("---")
-    
-    success = sync_repo(get_clone_url(repo), name, repos_dir)
-    return name, success
+
+def _add_common_args(parser: argparse.ArgumentParser) -> None:
+    """Add common arguments to a parser.
+
+    Args:
+        parser: Parser to add arguments to
+    """
+    # Global configuration
+    config_group = parser.add_argument_group('configuration')
+    config_group.add_argument(
+        '--repos-dir',
+        help='Base directory for repositories (overrides REPOS_BASE_DIR)'
+    )
+    config_group.add_argument(
+        '--username',
+        help='GitHub username (overrides GITHUB_USERNAME)'
+    )
+    config_group.add_argument(
+        '--token',
+        help='GitHub token (overrides GITHUB_TOKEN)'
+    )
+
+    # Execution control
+    exec_group = parser.add_argument_group('execution control')
+    exec_group.add_argument(
+        '--workers',
+        type=int,
+        metavar='N',
+        help='Number of parallel workers (default: CPU count)'
+    )
+    exec_group.add_argument(
+        '--sequential',
+        action='store_true',
+        help='Force sequential processing (no parallelization)'
+    )
+    exec_group.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Preview changes without executing'
+    )
+
+    # Repository filtering
+    filter_group = parser.add_argument_group('repository filtering')
+    filter_group.add_argument(
+        '--repo',
+        action='append',
+        dest='repos',
+        metavar='NAME',
+        help='Target specific repository (can be repeated)'
+    )
+    filter_group.add_argument(
+        '--org',
+        action='append',
+        dest='orgs',
+        metavar='NAME',
+        help='Filter by organization (can be repeated)'
+    )
+    filter_group.add_argument(
+        '--pattern',
+        metavar='GLOB',
+        help='Filter by name pattern (e.g., "my-*")'
+    )
+    filter_group.add_argument(
+        '--exclude-forks',
+        action='store_true',
+        help='Exclude forked repositories'
+    )
+    filter_group.add_argument(
+        '--exclude-archived',
+        action='store_true',
+        help='Exclude archived repositories'
+    )
+    filter_group.add_argument(
+        '--private-only',
+        action='store_true',
+        help='Only include private repositories'
+    )
+    filter_group.add_argument(
+        '--public-only',
+        action='store_true',
+        help='Only include public repositories'
+    )
+
+
+
 
 def main():
-    logger.info("=== Starting new sync session ===")
-    # Validate environment variables
-    username = os.getenv('GITHUB_USERNAME')
-    if not username:
-        logger.error("GITHUB_USERNAME must be set in .env file")
-        sys.exit(1)
-    
-    repos_dir = os.getenv('REPOS_BASE_DIR')
-    if not repos_dir:
-        logger.error("REPOS_BASE_DIR must be set in .env file")
-        sys.exit(1)
-    
-    if not os.path.isdir(repos_dir):
-        logger.error(f"REPOS_BASE_DIR '{repos_dir}' does not exist or is not a directory")
-        sys.exit(1)
-    
-    # Fetch repositories
-    repos = get_repos(username)
-    
-    # Determine processing mode based on token availability
-    if token := os.getenv('GITHUB_TOKEN'):
-        # Parallel processing with token
-        max_workers = multiprocessing.cpu_count()
-        logger.info(f"Using parallel processing with {max_workers} workers")
-        
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all tasks
-            future_to_repo = {
-                executor.submit(process_repo, repo, repos_dir): repo
-                for repo in repos
-            }
-            
-            # Process completed tasks
-            for future in as_completed(future_to_repo):
-                repo_name, success = future.result()
-                status = "Successfully processed" if success else "Failed to process"
-                logger.info(f"{status} repository: {repo_name}")
-    else:
-        # Sequential processing without token
-        logger.info("Using sequential processing (no token available)")
-        for repo in repos:
-            process_repo(repo, repos_dir)
-    logger.info("=== Sync session completed ===")
+    """Main entry point."""
+    # Parse arguments
+    parser = create_parser()
+    args = parser.parse_args()
+
+    # Setup logging
+    logger = setup_logging(operation=args.operation)
+
+    try:
+        # Load configuration
+        config = Config.from_env_and_args(
+            username=args.username,
+            repos_dir=args.repos_dir,
+            token=args.token,
+            max_workers=args.workers,
+            sequential=args.sequential
+        )
+
+        logger.info(f"Configuration loaded")
+        logger.info(f"  Username: {config.github_username}")
+        logger.info(f"  Base directory: {config.repos_base_dir}")
+        logger.info(f"  Authenticated: {config.is_authenticated}")
+
+        # Create GitHub client
+        github_client = GitHubClient(
+            username=config.github_username,
+            token=config.github_token
+        )
+
+        # Fetch repositories
+        logger.info("Fetching repositories from GitHub...")
+        repos = github_client.get_repos()
+
+        # Apply filters
+        repo_filter = RepoFilter(
+            repo_names=args.repos,
+            org_names=args.orgs,
+            patterns=[args.pattern] if args.pattern else None,
+            include_forks=not args.exclude_forks,
+            include_archived=not args.exclude_archived,
+            private_only=args.private_only,
+            public_only=args.public_only
+        )
+
+        if repo_filter.has_filters:
+            logger.info("Applying repository filters...")
+            repos = repo_filter.filter(repos)
+
+        if not repos:
+            logger.warning("No repositories match the filter criteria")
+            return 0
+
+        # Get operation class
+        operation_class = registry.get(args.operation)
+
+        # Check if operation requires token
+        if operation_class.requires_token and not config.is_authenticated:
+            logger.error(
+                f"Operation '{args.operation}' requires a GitHub token. "
+                "Set GITHUB_TOKEN in .env or use --token"
+            )
+            return 1
+
+        # Create repository manager
+        repo_manager = RepoManager(
+            github_client=github_client,
+            base_dir=config.repos_base_dir,
+            max_workers=config.max_workers,
+            sequential=config.sequential
+        )
+
+        # Build operation-specific kwargs
+        operation_kwargs = {'clone_url_getter': github_client.get_clone_url}
+
+        # Add operation-specific arguments
+        if args.operation == 'readme-gen':
+            operation_kwargs['force'] = getattr(args, 'force', False)
+        elif args.operation == 'settings-clean':
+            operation_kwargs['mode'] = getattr(args, 'mode', 'analyze')
+
+        # Execute operation
+        results = repo_manager.execute_operation(
+            operation_class=operation_class,
+            repos=repos,
+            dry_run=args.dry_run,
+            **operation_kwargs
+        )
+
+        # Print summary
+        print_summary(results, operation_name=args.operation)
+
+        # Return exit code based on failures
+        failed_count = sum(1 for r in results if r.failed)
+        return 1 if failed_count > 0 else 0
+
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        return 1
+    except KeyboardInterrupt:
+        logger.info("\nOperation cancelled by user")
+        return 130
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
