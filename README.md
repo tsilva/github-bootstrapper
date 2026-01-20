@@ -26,7 +26,7 @@ Perfect for developers managing dozens (or hundreds) of repositories who want to
 ## Features
 
 - **7 Powerful Operations** - sync, clone-only, pull-only, status, readme-gen, sandbox-enable, settings-clean
-- **Parallel Processing** - utilize all CPU cores for thread-safe operations (when authenticated)
+- **Parallel Processing** - utilize all CPU cores for thread-safe operations (no token required)
 - **Flexible Filtering** - target repos by name, org, pattern, visibility, or exclude forks/archived
 - **Dry-Run Mode** - preview changes before executing
 - **Claude Integration** - generate READMEs and clean settings using Claude Code skills

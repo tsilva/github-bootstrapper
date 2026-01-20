@@ -172,7 +172,7 @@ github-bootstrapper/
 - Repository deduplication by ID to handle overlaps between user/org repos
 - Default branch detection before pulling (uses `git rev-parse --abbrev-ref HEAD`)
 - Rate limit detection with graceful exit on HTTP 403
-- Thread-safe parallel processing when token is available and operation allows it
+- Thread-safe parallel processing for all operations marked as safe_parallel (no token required)
 - Dry-run mode available for all operations
 - Comprehensive filtering: by repo name, org, pattern, visibility, fork/archived status
 

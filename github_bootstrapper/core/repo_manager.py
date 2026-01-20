@@ -75,13 +75,14 @@ class RepoManager:
         # Determine processing mode
         use_parallel = (
             not self.sequential and
-            operation.safe_parallel and
-            self.github_client.is_authenticated
+            operation.safe_parallel
         )
 
         if use_parallel:
+            logger.info(f"Using parallel processing with {self.max_workers} workers")
             results = self._execute_parallel(operation, repos)
         else:
+            logger.info("Using sequential processing")
             results = self._execute_sequential(operation, repos)
 
         # Call post-batch hook
@@ -103,8 +104,6 @@ class RepoManager:
         Returns:
             List of operation results
         """
-        logger.info(f"Using parallel processing with {self.max_workers} workers")
-
         results = []
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tasks
@@ -137,8 +136,6 @@ class RepoManager:
         Returns:
             List of operation results
         """
-        logger.info("Using sequential processing")
-
         results = []
         for repo in repos:
             result = self._process_repo(operation, repo)
