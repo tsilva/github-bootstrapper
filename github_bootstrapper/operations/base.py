@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from enum import Enum
 
 
@@ -83,11 +83,20 @@ class Operation(ABC):
         """
         return None
 
-    def pre_batch_hook(self, repos: List[Dict[str, Any]]) -> None:
-        """Hook called before processing batch of repositories.
+    def pre_batch_hook(
+        self,
+        repos_to_execute: List[Dict[str, Any]],
+        repos_skipped: List[Tuple[Dict[str, Any], str]],
+        base_dir: str,
+        dry_run: bool
+    ) -> None:
+        """Hook called before batch execution starts.
 
         Args:
-            repos: List of repositories to process
+            repos_to_execute: List of repositories that will be processed
+            repos_skipped: List of (repo, skip_reason) tuples for skipped repos
+            base_dir: Base directory for repositories
+            dry_run: Whether this is a dry run
         """
         pass
 

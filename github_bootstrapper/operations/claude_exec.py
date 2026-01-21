@@ -2,7 +2,7 @@
 
 import subprocess
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from .base import Operation, OperationResult, OperationStatus
 from ..prompt_templates import template_registry, RawPromptTemplate
 
@@ -16,7 +16,7 @@ class ClaudeExecOperation(Operation):
     description = "Execute Claude prompts using templates or raw prompts"
     requires_token = False
     safe_parallel = False  # Sequential for Claude API rate limits
-    show_progress_only = False  # Show individual logs
+    show_progress_only = True  # Show progress bar instead of individual logs
 
     def __init__(
         self,
@@ -51,9 +51,6 @@ class ClaudeExecOperation(Operation):
             self.template = RawPromptTemplate(prompt)
             self.is_builtin = False
 
-        # For briefing in pre_batch_hook
-        self.execution_plan = []
-
     def should_skip(self, repo: Dict, repo_path: str) -> Optional[str]:
         """Check if operation should be skipped for this repository.
 
@@ -78,30 +75,21 @@ class ClaudeExecOperation(Operation):
 
         return None
 
-    def pre_batch_hook(self, repos: List[Dict]) -> None:
+    def pre_batch_hook(
+        self,
+        repos_to_execute: List[Dict],
+        repos_skipped: List[Tuple[Dict, str]],
+        base_dir: str,
+        dry_run: bool
+    ) -> None:
         """Show execution briefing and get user confirmation.
 
         Args:
-            repos: List of repository dictionaries from GitHub API
+            repos_to_execute: List of repositories that will be processed
+            repos_skipped: List of (repo, skip_reason) tuples for skipped repos
+            base_dir: Base directory for repositories
+            dry_run: Whether this is a dry run
         """
-        # Build execution plan
-        for repo in repos:
-            repo_path = self.get_repo_path(repo)
-            skip_reason = self.should_skip(repo, repo_path)
-
-            if skip_reason:
-                self.execution_plan.append({
-                    'repo': repo,
-                    'will_run': False,
-                    'reason': skip_reason
-                })
-            else:
-                self.execution_plan.append({
-                    'repo': repo,
-                    'will_run': True,
-                    'reason': 'Will execute'
-                })
-
         # Display briefing
         print("\n" + "=" * 60)
         print("CLAUDE EXECUTION BRIEFING")
@@ -115,27 +103,30 @@ class ClaudeExecOperation(Operation):
 
         print(f"\nPrompt: {self.template.prompt}")
 
-        will_run = [p for p in self.execution_plan if p['will_run']]
-        will_skip = [p for p in self.execution_plan if not p['will_run']]
+        # Show repos to execute (use repos_to_execute directly)
+        print(f"\nRepositories to execute: {len(repos_to_execute)}")
+        if repos_to_execute:
+            for repo in repos_to_execute[:10]:  # Show first 10
+                print(f"  ✓ {repo['full_name']}")
+            if len(repos_to_execute) > 10:
+                print(f"  ... and {len(repos_to_execute) - 10} more")
 
-        print(f"\nRepositories to execute: {len(will_run)}")
-        if will_run:
-            for item in will_run[:10]:  # Show first 10
-                print(f"  ✓ {item['repo']['full_name']}")
-            if len(will_run) > 10:
-                print(f"  ... and {len(will_run) - 10} more")
-
-        print(f"\nRepositories to skip: {len(will_skip)}")
-        if will_skip and len(will_skip) <= 10:
-            for item in will_skip:
-                print(f"  ⊘ {item['repo']['full_name']} - {item['reason']}")
-        elif will_skip:
-            print(f"  ({len(will_skip)} repos - run with --dry-run to see details)")
+        # Show skipped repos count only (no details during briefing)
+        if repos_skipped:
+            print(f"\nRepositories to skip: {len(repos_skipped)}")
+            if dry_run:
+                # In dry-run mode, show details
+                for repo, reason in repos_skipped[:10]:
+                    print(f"  ⊘ {repo['full_name']} - {reason}")
+                if len(repos_skipped) > 10:
+                    print(f"  ... and {len(repos_skipped) - 10} more")
+            else:
+                print(f"  (run with --dry-run to see details)")
 
         print("=" * 60)
 
         # Ask for confirmation unless --yes flag or dry-run
-        if not self.yes and not self.dry_run:
+        if not self.yes and not dry_run:
             response = input("\nProceed with execution? [y/N]: ")
             if response.lower() != 'y':
                 print("Execution cancelled.")
@@ -154,17 +145,6 @@ class ClaudeExecOperation(Operation):
         """
         repo_name = repo['name']
         repo_full_name = repo['full_name']
-
-        # Check if should skip
-        skip_reason = self.should_skip(repo, repo_path)
-        if skip_reason:
-            logger.info(f"Skipping {repo_name}: {skip_reason}")
-            return OperationResult(
-                status=OperationStatus.SKIPPED,
-                message=skip_reason,
-                repo_name=repo_name,
-                repo_full_name=repo_full_name
-            )
 
         # Handle dry run
         if self.dry_run:

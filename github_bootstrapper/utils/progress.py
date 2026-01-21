@@ -2,7 +2,7 @@
 
 import sys
 import logging
-from typing import List
+from typing import List, Optional
 from ..operations.base import OperationResult, OperationStatus
 
 logger = logging.getLogger('github_bootstrapper')
@@ -24,13 +24,16 @@ class ProgressTracker:
         self.success_count = 0
         self.skipped_count = 0
         self.failed_count = 0
+        self.current_repo: Optional[str] = None
 
-    def update(self, result: OperationResult) -> None:
+    def update(self, result: OperationResult, current_repo: Optional[str] = None) -> None:
         """Update progress with a new result.
 
         Args:
             result: Operation result
+            current_repo: Optional name of the current repo being processed
         """
+        self.current_repo = current_repo
         self.completed += 1
 
         if result.status == OperationStatus.SUCCESS:
@@ -52,11 +55,15 @@ class ProgressTracker:
         filled = int(bar_width * self.completed / self.total) if self.total > 0 else 0
         bar = '█' * filled + '░' * (bar_width - filled)
 
-        # Create status line
+        # Build status with current repo if available
         status = (
             f"\r[{bar}] {percentage:.0f}% ({self.completed}/{self.total}) "
-            f"✓{self.success_count} ⊘{self.skipped_count} ✗{self.failed_count}"
         )
+
+        if self.current_repo:
+            status += f"Current: {self.current_repo} "
+
+        status += f"✓{self.success_count} ⊘{self.skipped_count} ✗{self.failed_count}"
 
         # Write to stderr to avoid mixing with log output
         sys.stderr.write(status)

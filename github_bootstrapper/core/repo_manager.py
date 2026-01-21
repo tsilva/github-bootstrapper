@@ -67,16 +67,40 @@ class RepoManager:
 
         logger.info(f"Executing operation: {operation.name}")
         logger.info(f"Description: {operation.description}")
-        logger.info(f"Repositories: {len(repos)}")
+        logger.info(f"Total repositories: {len(repos)}")
         logger.info(f"Dry run: {dry_run}")
 
-        # Call pre-batch hook
-        operation.pre_batch_hook(repos)
+        # Pre-filter repositories
+        repos_to_execute = []
+        repos_skipped = []
+
+        for repo in repos:
+            repo_path = operation.get_repo_path(repo)
+            skip_reason = operation.should_skip(repo, repo_path)
+
+            if skip_reason:
+                repos_skipped.append((repo, skip_reason))
+            else:
+                repos_to_execute.append(repo)
+
+        # Update repo count logging
+        logger.info(f"Repositories to process: {len(repos_to_execute)}")
+        if repos_skipped:
+            logger.info(f"Repositories to skip: {len(repos_skipped)}")
+
+        # Call pre-batch hook with filtered lists
+        operation.pre_batch_hook(repos_to_execute, repos_skipped, self.base_dir, dry_run)
+
+        # In dry-run mode, log all skip reasons
+        if dry_run and repos_skipped:
+            logger.info("\nSkipped repositories:")
+            for repo, reason in repos_skipped:
+                logger.info(f"  ⊘ {repo['full_name']}: {reason}")
 
         # Create progress tracker if needed
         progress_tracker = None
         if operation.show_progress_only:
-            progress_tracker = ProgressTracker(len(repos), operation.name)
+            progress_tracker = ProgressTracker(len(repos_to_execute), operation.name)
 
         # Determine processing mode
         use_parallel = (
@@ -86,10 +110,10 @@ class RepoManager:
 
         if use_parallel:
             logger.info(f"Using parallel processing with {self.max_workers} workers")
-            results = self._execute_parallel(operation, repos, progress_tracker)
+            results = self._execute_parallel(operation, repos_to_execute, progress_tracker)
         else:
             logger.info("Using sequential processing")
-            results = self._execute_sequential(operation, repos, progress_tracker)
+            results = self._execute_sequential(operation, repos_to_execute, progress_tracker)
 
         # Finish progress tracker
         if progress_tracker:
@@ -160,7 +184,8 @@ class RepoManager:
 
             # Update progress or log result
             if progress_tracker:
-                progress_tracker.update(result)
+                # Pass repo name as current_repo when updating
+                progress_tracker.update(result, current_repo=repo['full_name'])
             else:
                 self._log_result(result)
 
