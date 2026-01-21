@@ -38,12 +38,11 @@ Examples:
   # Pull updates for existing repositories
   github-bootstrapper pull-only --workers 8
 
-  # Execute Claude prompts using templates (forks excluded by default)
-  github-bootstrapper exec init
-  github-bootstrapper exec readme --yes
+  # Execute Claude prompts using templates (forks/archived excluded by default)
+  github-bootstrapper claude-exec init
 
   # Execute raw Claude prompts
-  github-bootstrapper exec "Add a LICENSE file"
+  github-bootstrapper claude-exec "/readme-generator"
 
   # Enable sandbox mode for all repos
   github-bootstrapper sandbox-enable
@@ -82,7 +81,7 @@ Examples:
         _add_common_args(op_parser)
 
         # Add operation-specific arguments
-        if op_name == 'exec':
+        if op_name == 'claude-exec':
             op_parser.add_argument(
                 'prompt',
                 help='Template name or raw prompt string'
@@ -299,7 +298,7 @@ def main():
         operation_kwargs = {'clone_url_getter': github_client.get_clone_url}
 
         # Add operation-specific arguments
-        if args.operation == 'exec':
+        if args.operation == 'claude-exec':
             operation_kwargs['prompt'] = args.prompt
             operation_kwargs['force'] = getattr(args, 'force', False)
             operation_kwargs['yes'] = getattr(args, 'yes', False)

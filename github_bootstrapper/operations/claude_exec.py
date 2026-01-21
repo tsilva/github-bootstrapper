@@ -12,7 +12,7 @@ logger = logging.getLogger('github_bootstrapper')
 class ClaudeExecOperation(Operation):
     """Execute Claude prompts using templates or raw prompts."""
 
-    name = "exec"
+    name = "claude-exec"
     description = "Execute Claude prompts using templates or raw prompts"
     requires_token = False
     safe_parallel = False  # Sequential for Claude API rate limits

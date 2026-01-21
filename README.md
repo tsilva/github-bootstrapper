@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="github-bootstrapper" width="280"/>
+  <img src="logo.png" alt="github-bootstrapper" width="512"/>
 
   [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/tsilva/github-bootstrapper)
   [![Python](https://img.shields.io/badge/python-3.8+-blue)](https://www.python.org/)
@@ -15,21 +15,21 @@
 
 ## Overview
 
-github-bootstrapper is a multi-operation CLI that manages your entire GitHub repository portfolio. Clone missing repos, pull updates, generate READMEs with Claude, enable sandbox mode, and clean settings - all with parallel processing and intelligent filtering.
+github-bootstrapper is a multi-operation CLI that manages your entire GitHub repository portfolio. Clone missing repos, pull updates, execute Claude prompts with templates, enable sandbox mode, and clean settings - all with parallel processing and intelligent filtering.
 
 Perfect for developers managing dozens (or hundreds) of repositories who want to:
 - Keep local checkouts in sync without manual git commands
 - Apply consistent configurations across all projects
-- Automate documentation and settings management
+- Automate documentation and settings management with Claude Code
 - Filter operations by org, visibility, patterns, or specific repos
 
 ## Features
 
-- **7 Powerful Operations** - sync, clone-only, pull-only, status, readme-gen, sandbox-enable, settings-clean
-- **Parallel Processing** - utilize all CPU cores for thread-safe operations (no token required)
+- **7 Powerful Operations** - sync, clone-only, pull-only, status, claude-exec, sandbox-enable, settings-clean
+- **Parallel Processing** - utilize all CPU cores for thread-safe operations
 - **Flexible Filtering** - target repos by name, org, pattern, visibility, or exclude forks/archived
 - **Dry-Run Mode** - preview changes before executing
-- **Claude Integration** - generate READMEs and clean settings using Claude Code skills
+- **Claude Integration** - execute prompts using built-in templates or raw prompts
 - **Smart Safety** - automatically skips repos with unstaged changes during pull operations
 - **Authenticated & Unauthenticated Modes** - SSH URLs with token, HTTPS without
 - **Live Progress** - visual progress bar with success/skip/fail counts
@@ -113,13 +113,13 @@ Clone new repositories and pull updates for existing ones.
 
 ```bash
 # Sync all repos
-uv run github-bootstrapper sync
+github-bootstrapper sync --username your-username
 
 # Dry-run to preview
-uv run github-bootstrapper sync --dry-run
+github-bootstrapper sync --username your-username --dry-run
 
 # Sync only private repos from a specific org
-uv run github-bootstrapper sync --org mycompany --private-only
+github-bootstrapper sync --username your-username --org mycompany --private-only
 ```
 
 **Behavior:**
@@ -136,10 +136,10 @@ Clone repositories that don't exist locally (skip existing).
 
 ```bash
 # Clone all missing repos
-uv run github-bootstrapper clone-only
+github-bootstrapper clone-only --username your-username
 
 # Clone only repos matching pattern
-uv run github-bootstrapper clone-only --pattern "my-*"
+github-bootstrapper clone-only --username your-username --pattern "my-*"
 ```
 
 **Behavior:**
@@ -155,10 +155,10 @@ Pull updates for repositories that exist locally (skip missing).
 
 ```bash
 # Pull updates for all existing repos
-uv run github-bootstrapper pull-only
+github-bootstrapper pull-only --username your-username
 
 # Use 8 parallel workers
-uv run github-bootstrapper pull-only --workers 8
+github-bootstrapper pull-only --username your-username --workers 8
 ```
 
 **Behavior:**
@@ -188,34 +188,45 @@ github-bootstrapper status --username your-username --private-only
 - Categorizes repos: In sync, Unpushed changes, Unpulled changes, Diverged, Uncommitted changes, Not cloned
 - Fetches from remote for accurate status
 - Provides grouped summary output
-- Thread-safe parallel execution
+- Thread-safe parallel execution (8 workers by default)
 
 ---
 
-### 5. readme-gen
+### 5. claude-exec
 
-Generate or update README.md using Claude's readme-generator skill.
+Execute Claude prompts using built-in templates or raw prompts.
 
 ```bash
-# Generate READMEs for repos without one
-uv run github-bootstrapper readme-gen
+# List available templates
+github-bootstrapper --list-templates
 
-# Force regenerate even if README exists
-uv run github-bootstrapper readme-gen --force
+# Execute using built-in templates
+github-bootstrapper claude-exec init --username your-username
 
-# Generate only for non-fork repos
-uv run github-bootstrapper readme-gen --exclude-forks
+# Execute raw prompts
+github-bootstrapper claude-exec "Add a LICENSE file" --username your-username
+
+# Force execution (ignore template should_run logic)
+github-bootstrapper claude-exec init --username your-username --force
+
+# Skip confirmation prompt
+github-bootstrapper claude-exec init --username your-username --yes
 ```
 
+**Built-in Templates:**
+| Template | Description |
+|----------|-------------|
+| `init` | Initialize CLAUDE.md files (skips archived, forks, existing CLAUDE.md) |
+
 **Behavior:**
-- Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits`
-- Skips archived and fork repos by default
+- Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits --output-format json`
+- Pre-execution briefing with confirmation prompt (can skip with `--yes`)
+- Supports variable substitution: `{{repo_name}}`, `{{repo_full_name}}`, `{{default_branch}}`, `{{description}}`, `{{language}}`
 - Sequential execution (Claude API rate limits)
 - 5-minute timeout per repository
 
 **Requirements:**
 - Claude Code CLI installed and authenticated
-- readme-generator skill available
 
 ---
 
@@ -225,10 +236,10 @@ Enable Claude Code sandbox mode with auto-allow bash for all repos.
 
 ```bash
 # Enable sandbox for all repos
-uv run github-bootstrapper sandbox-enable
+github-bootstrapper sandbox-enable --username your-username
 
 # Enable for specific repos
-uv run github-bootstrapper sandbox-enable --repo repo1 --repo repo2
+github-bootstrapper sandbox-enable --username your-username --repo repo1 --repo repo2
 ```
 
 **Behavior:**
@@ -245,13 +256,13 @@ Analyze and clean Claude Code permission whitelists.
 
 ```bash
 # Analyze settings (default mode)
-uv run github-bootstrapper settings-clean
+github-bootstrapper settings-clean --username your-username
 
 # Clean settings interactively
-uv run github-bootstrapper settings-clean --mode clean
+github-bootstrapper settings-clean --username your-username --mode clean
 
 # Auto-fix issues
-uv run github-bootstrapper settings-clean --mode auto-fix
+github-bootstrapper settings-clean --username your-username --mode auto-fix
 ```
 
 **Behavior:**
@@ -272,8 +283,8 @@ All operations support powerful filtering options:
 | `--repo NAME` | Target specific repo(s) | `--repo my-app --repo another-app` |
 | `--org NAME` | Filter by organization | `--org mycompany --org otherorg` |
 | `--pattern GLOB` | Filter by name pattern | `--pattern "web-*"` |
-| `--exclude-forks` | Exclude forked repos | `--exclude-forks` |
-| `--exclude-archived` | Exclude archived repos | `--exclude-archived` |
+| `--include-forks` | Include forked repos (excluded by default) | `--include-forks` |
+| `--include-archived` | Include archived repos (excluded by default) | `--include-archived` |
 | `--private-only` | Only private repos | `--private-only` |
 | `--public-only` | Only public repos | `--public-only` |
 
@@ -281,21 +292,19 @@ All operations support powerful filtering options:
 
 ```bash
 # Sync only private repos from your company
-uv run github-bootstrapper sync --org mycompany --private-only
+github-bootstrapper sync --username your-username --org mycompany --private-only
 
-# Generate READMEs for your personal projects (exclude forks)
-uv run github-bootstrapper readme-gen --pattern "my-*" --exclude-forks
+# Execute prompts for your personal projects (exclude forks)
+github-bootstrapper claude-exec "Update copyright year" --username your-username --pattern "my-*"
 
 # Enable sandbox only for active development repos
-uv run github-bootstrapper sandbox-enable --exclude-archived
+github-bootstrapper sandbox-enable --username your-username
 
 # Pull updates for specific repos
-uv run github-bootstrapper pull-only --repo web-app --repo api-server
+github-bootstrapper pull-only --username your-username --repo web-app --repo api-server
 ```
 
 ## Examples
-
-> **Note:** Examples show global installation commands. For local installation, prefix with `uv run`.
 
 ### Daily Workflow
 
@@ -342,11 +351,11 @@ github-bootstrapper settings-clean --username your-username --mode auto-fix
 ### Documentation Sprint
 
 ```bash
-# Generate READMEs for all personal projects (excluding forks)
-github-bootstrapper readme-gen --username your-username --exclude-forks --exclude-archived
+# Initialize CLAUDE.md for all projects
+github-bootstrapper claude-exec init --username your-username
 
-# Force regenerate for specific repos
-github-bootstrapper readme-gen --username your-username --force --repo my-main-project
+# Execute raw prompt for documentation
+github-bootstrapper claude-exec "/readme-generator" --username your-username
 ```
 
 ### Fresh Machine Setup
@@ -361,8 +370,8 @@ github-bootstrapper clone-only --username your-username
 # Enable sandbox mode for all
 github-bootstrapper sandbox-enable --username your-username
 
-# Generate missing READMEs
-github-bootstrapper readme-gen --username your-username
+# Initialize CLAUDE.md files
+github-bootstrapper claude-exec init --username your-username
 ```
 
 ## Global Options
@@ -394,9 +403,15 @@ github_bootstrapper/
 │   ├── sync.py             # Clone + pull
 │   ├── clone_only.py       # Clone missing
 │   ├── pull_only.py        # Pull existing
-│   ├── readme_gen.py       # README generation
+│   ├── status.py           # Status reporting
+│   ├── claude_exec.py      # Execute Claude prompts
 │   ├── settings_clean.py   # Settings cleanup
 │   └── sandbox_enable.py   # Sandbox enablement
+├── prompt_templates/
+│   ├── base.py             # Abstract PromptTemplate class
+│   ├── registry.py         # Template auto-discovery
+│   ├── init.py             # CLAUDE.md initialization
+│   └── raw.py              # Raw prompt wrapper
 └── utils/
     ├── git.py              # Git helpers
     ├── filters.py          # Repository filtering
@@ -432,15 +447,32 @@ class MyOperation(Operation):
 
 The registry auto-discovers it - no other changes needed!
 
+### Adding New Prompt Templates
+
+Create a new template in `prompt_templates/` directory:
+
+```python
+from .base import PromptTemplate
+
+class MyTemplate(PromptTemplate):
+    name = "my-template"
+    description = "Does something with Claude"
+    prompt = "Your prompt here with {{repo_name}} variables"
+
+    def should_run(self, repo, repo_path):
+        # Return (True, None) to run, or (False, "reason") to skip
+        return True, None
+```
+
 ## Authentication Modes
 
 ### Authenticated Mode (Recommended)
 
 With a GitHub token:
-- ✅ Access private and organization repos
-- ✅ Parallel processing (faster)
-- ✅ SSH URLs (no password prompts)
-- ✅ Higher API rate limits
+- Access private and organization repos
+- Parallel processing (faster)
+- SSH URLs (no password prompts)
+- Higher API rate limits
 
 ```env
 GITHUB_TOKEN=ghp_xxxxxxxxxxxx
@@ -449,10 +481,10 @@ GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 ### Unauthenticated Mode
 
 Without a token:
-- ⚠️ Public repos only
-- ⚠️ Sequential processing
-- ⚠️ HTTPS URLs (may prompt for credentials)
-- ⚠️ Lower API rate limits
+- Public repos only
+- Sequential processing
+- HTTPS URLs (may prompt for credentials)
+- Lower API rate limits
 
 ## Progress Tracking
 
@@ -490,7 +522,7 @@ Failed repositories:
 - uv (package manager)
 - git
 - GitHub account
-- Claude Code CLI (for readme-gen operation)
+- Claude Code CLI (for claude-exec operation)
 
 ## Contributing
 
@@ -514,6 +546,7 @@ uv run github-bootstrapper --help
 ### Contribution Ideas
 
 - New operations (PR creation, dependency updates, license compliance)
+- New prompt templates (documentation, testing, linting)
 - Additional filters (by language, by activity, by size)
 - Enhanced progress tracking
 - Operation result export (JSON, CSV)
@@ -528,7 +561,7 @@ Copyright (c) 2025 Tiago Silva
 ---
 
 <div align="center">
-  Made with ❤️ by developers who manage too many repos
+  Made with care by developers who manage too many repos
 
-  If this helps you, please ⭐ star the repo!
+  If this helps you, please star the repo!
 </div>

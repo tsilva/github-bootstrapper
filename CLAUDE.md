@@ -4,15 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports seven operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), exec (execute Claude prompts using templates or raw prompts), settings-clean (Claude Code settings cleanup), and sandbox-enable (enable Claude Code sandbox mode). Features include parallel processing, flexible filtering, and an extensible operation framework.
+GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports seven operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), claude-exec (execute Claude prompts using templates or raw prompts), settings-clean (Claude Code settings cleanup), and sandbox-enable (enable Claude Code sandbox mode). Features include parallel processing, flexible filtering, and an extensible operation framework.
 
 ## Prompt Templates
 
-The `exec` operation supports built-in prompt templates with intelligent filtering logic:
+The `claude-exec` operation supports built-in prompt templates with intelligent filtering logic:
 
 **Built-in Templates:**
 - **init** - Initialize CLAUDE.md files (skips archived, forks, existing CLAUDE.md)
-- **readme** - Generate README.md files (skips archived, forks, existing README.md)
 
 **Template Features:**
 - Intelligent filtering via `should_run()` logic (can be overridden with `--force`)
@@ -70,14 +69,13 @@ github-bootstrapper pull-only --username your-username
 github-bootstrapper --list-templates
 
 # Execute using built-in templates (forks excluded by default)
-github-bootstrapper exec init --username your-username
-github-bootstrapper exec readme --username your-username --yes
+github-bootstrapper claude-exec init --username your-username
 
 # Execute using raw prompts
-github-bootstrapper exec "Add a LICENSE file" --username your-username
+github-bootstrapper claude-exec "Add a LICENSE file" --username your-username
 
 # Force execution (ignore should_run logic)
-github-bootstrapper exec readme --force --username your-username
+github-bootstrapper claude-exec readme --force --username your-username
 
 # Enable sandbox mode
 github-bootstrapper sandbox-enable --username your-username
@@ -113,7 +111,6 @@ github-bootstrapper/
 │   │   ├── base.py                 # Abstract PromptTemplate class
 │   │   ├── registry.py             # Template auto-discovery
 │   │   ├── init.py                 # CLAUDE.md initialization template
-│   │   ├── readme.py               # README generation template
 │   │   └── raw.py                  # Raw prompt template
 │   └── utils/
 │       ├── git.py                  # Git helpers
@@ -189,12 +186,12 @@ github-bootstrapper/
    - Fetches from remote to ensure accurate status
    - Provides grouped summary output
 
-5. **exec** - Execute Claude prompts using templates or raw prompts
+5. **claude-exec** - Execute Claude prompts using templates or raw prompts
    - Parallelization: No (Claude API rate limits)
    - Supports built-in templates with intelligent filtering
    - Variable substitution in prompts: `{{repo_name}}`, `{{repo_full_name}}`, etc.
    - Pre-execution briefing with confirmation prompt (can skip with `--yes`)
-   - Templates: init (CLAUDE.md), readme (README.md)
+   - Templates: init (CLAUDE.md)
    - Can use raw prompts for ad-hoc tasks
    - Force mode (`--force`) to ignore template `should_run()` logic
    - Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits --output-format json`
