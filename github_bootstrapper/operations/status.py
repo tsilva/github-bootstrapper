@@ -17,7 +17,7 @@ class StatusOperation(Operation):
     requires_token = False
     safe_parallel = True
     show_progress_only = True  # Show progress bar instead of individual logs
-    default_workers = 16  # Status checks are I/O bound, benefit from more workers
+    default_workers = 8  # Status checks are I/O bound, benefit from more workers
 
     def __init__(self, base_dir: str, dry_run: bool = False, fetch: bool = True, clone_url_getter=None):
         """Initialize status operation.
