@@ -69,8 +69,8 @@ github-bootstrapper pull-only --username your-username
 # List available prompt templates
 github-bootstrapper --list-templates
 
-# Execute using built-in templates
-github-bootstrapper exec init --username your-username --exclude-forks
+# Execute using built-in templates (forks excluded by default)
+github-bootstrapper exec init --username your-username
 github-bootstrapper exec readme --username your-username --yes
 
 # Execute using raw prompts
@@ -221,6 +221,8 @@ github-bootstrapper/
 - Thread-safe parallel processing for all operations marked as safe_parallel (no token required)
 - Dry-run mode available for all operations
 - Comprehensive filtering: by repo name, org, pattern, visibility, fork/archived status
+- Forked repositories are excluded by default (use `--include-forks` to include them)
+- Archived repositories are excluded by default (use `--include-archived` to include them)
 
 ## Key Dependencies
 

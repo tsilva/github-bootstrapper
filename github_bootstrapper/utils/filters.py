@@ -15,8 +15,8 @@ class RepoFilter:
         repo_names: Optional[List[str]] = None,
         org_names: Optional[List[str]] = None,
         patterns: Optional[List[str]] = None,
-        include_forks: bool = True,
-        include_archived: bool = True,
+        include_forks: bool = False,
+        include_archived: bool = False,
         private_only: bool = False,
         public_only: bool = False
     ):
@@ -26,8 +26,8 @@ class RepoFilter:
             repo_names: Specific repository names to include
             org_names: Organization names to filter by
             patterns: Glob patterns for repository names
-            include_forks: Include forked repositories
-            include_archived: Include archived repositories
+            include_forks: Include forked repositories (default: False)
+            include_archived: Include archived repositories (default: False)
             private_only: Only include private repositories
             public_only: Only include public repositories
         """

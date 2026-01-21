@@ -38,8 +38,8 @@ Examples:
   # Pull updates for existing repositories
   github-bootstrapper pull-only --workers 8
 
-  # Execute Claude prompts using templates
-  github-bootstrapper exec init --exclude-forks
+  # Execute Claude prompts using templates (forks excluded by default)
+  github-bootstrapper exec init
   github-bootstrapper exec readme --yes
 
   # Execute raw Claude prompts
@@ -182,14 +182,14 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
         help='Filter by name pattern (e.g., "my-*")'
     )
     filter_group.add_argument(
-        '--exclude-forks',
+        '--include-forks',
         action='store_true',
-        help='Exclude forked repositories'
+        help='Include forked repositories (excluded by default)'
     )
     filter_group.add_argument(
-        '--exclude-archived',
+        '--include-archived',
         action='store_true',
-        help='Exclude archived repositories'
+        help='Include archived repositories (excluded by default)'
     )
     filter_group.add_argument(
         '--private-only',
@@ -257,8 +257,8 @@ def main():
             repo_names=args.repos,
             org_names=args.orgs,
             patterns=[args.pattern] if args.pattern else None,
-            include_forks=not args.exclude_forks,
-            include_archived=not args.exclude_archived,
+            include_forks=args.include_forks,
+            include_archived=args.include_archived,
             private_only=args.private_only,
             public_only=args.public_only
         )
