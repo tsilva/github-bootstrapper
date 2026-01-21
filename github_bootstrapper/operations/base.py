@@ -46,6 +46,7 @@ class Operation(ABC):
     requires_token: bool = False
     safe_parallel: bool = True
     show_progress_only: bool = False  # If True, show progress bar instead of individual logs
+    default_workers: Optional[int] = None  # Default number of workers for this operation
 
     def __init__(self, base_dir: str, dry_run: bool = False, **kwargs):
         """Initialize operation.

@@ -274,6 +274,11 @@ def main():
         # Get operation class
         operation_class = registry.get(args.operation)
 
+        # Use operation's default workers if user didn't specify
+        if args.workers is None and operation_class.default_workers is not None:
+            config.max_workers = operation_class.default_workers
+            logger.info(f"  Using operation default workers: {config.max_workers}")
+
         # Check if operation requires token
         if operation_class.requires_token and not config.is_authenticated:
             logger.error(

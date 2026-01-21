@@ -17,6 +17,7 @@ class StatusOperation(Operation):
     requires_token = False
     safe_parallel = True
     show_progress_only = True  # Show progress bar instead of individual logs
+    default_workers = 16  # Status checks are I/O bound, benefit from more workers
 
     def __init__(self, base_dir: str, dry_run: bool = False, fetch: bool = True, clone_url_getter=None):
         """Initialize status operation.
@@ -159,8 +160,9 @@ class StatusOperation(Operation):
             count = len(repos)
             print(f"\n{category}: {count} {'repository' if count == 1 else 'repositories'}")
 
-            # Only show repo list if 10 or fewer
-            if count <= 10:
+            # Always show repo list for actionable categories, otherwise only if 10 or fewer
+            always_list = {"Uncommitted changes", "Unpushed changes", "Unpulled changes", "Diverged", "Not cloned"}
+            if category in always_list or count <= 10:
                 for repo_info in repos:
                     if isinstance(repo_info, tuple):
                         # Repos with counts (diverged, unpulled, unpushed)
