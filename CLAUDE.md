@@ -4,7 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports seven operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), readme-gen (README generation via Claude), settings-clean (Claude Code settings cleanup), and sandbox-enable (enable Claude Code sandbox mode). Features include parallel processing, flexible filtering, and an extensible operation framework.
+GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports seven operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), exec (execute Claude prompts using templates or raw prompts), settings-clean (Claude Code settings cleanup), and sandbox-enable (enable Claude Code sandbox mode). Features include parallel processing, flexible filtering, and an extensible operation framework.
+
+## Prompt Templates
+
+The `exec` operation supports built-in prompt templates with intelligent filtering logic:
+
+**Built-in Templates:**
+- **init** - Initialize CLAUDE.md files (skips archived, forks, existing CLAUDE.md)
+- **readme** - Generate README.md files (skips archived, forks, existing README.md)
+
+**Template Features:**
+- Intelligent filtering via `should_run()` logic (can be overridden with `--force`)
+- Variable substitution support:
+  - `{{repo_name}}` - Repository name
+  - `{{repo_full_name}}` - Full repository name (owner/repo)
+  - `{{default_branch}}` - Default branch name
+  - `{{description}}` - Repository description
+  - `{{language}}` - Primary language
+- Pre-execution briefing with confirmation prompt
+- Sequential execution to respect Claude API rate limits
+
+**Raw Prompts:**
+You can also execute ad-hoc prompts by providing any text that doesn't match a template name. Raw prompts run on all locally cloned repositories (unless filtered).
+
+**Extensibility:**
+Add new templates by creating a Python file in `github_bootstrapper/prompt_templates/` that inherits from `PromptTemplate`. The registry auto-discovers new templates via introspection.
 
 ## Development Setup
 
@@ -41,8 +66,18 @@ github-bootstrapper clone-only --username your-username --dry-run
 # Pull updates for existing repositories
 github-bootstrapper pull-only --username your-username
 
-# Generate READMEs
-github-bootstrapper readme-gen --username your-username --exclude-forks
+# List available prompt templates
+github-bootstrapper --list-templates
+
+# Execute using built-in templates
+github-bootstrapper exec init --username your-username --exclude-forks
+github-bootstrapper exec readme --username your-username --yes
+
+# Execute using raw prompts
+github-bootstrapper exec "Add a LICENSE file" --username your-username
+
+# Force execution (ignore should_run logic)
+github-bootstrapper exec readme --force --username your-username
 
 # Enable sandbox mode
 github-bootstrapper sandbox-enable --username your-username
@@ -71,9 +106,15 @@ github-bootstrapper/
 │   │   ├── clone_only.py           # Clone-only operation
 │   │   ├── pull_only.py            # Pull-only operation
 │   │   ├── status.py               # Repository status operation
-│   │   ├── readme_gen.py           # README generation via Claude CLI
+│   │   ├── claude_exec.py          # Execute Claude prompts
 │   │   ├── settings_clean.py       # Settings cleanup via script
 │   │   └── sandbox_enable.py       # Sandbox mode enablement
+│   ├── prompt_templates/
+│   │   ├── base.py                 # Abstract PromptTemplate class
+│   │   ├── registry.py             # Template auto-discovery
+│   │   ├── init.py                 # CLAUDE.md initialization template
+│   │   ├── readme.py               # README generation template
+│   │   └── raw.py                  # Raw prompt template
 │   └── utils/
 │       ├── git.py                  # Git helpers
 │       ├── progress.py             # Progress tracking
@@ -148,10 +189,15 @@ github-bootstrapper/
    - Fetches from remote to ensure accurate status
    - Provides grouped summary output
 
-5. **readme-gen** - Generate/update README.md using Claude's readme-generator skill
+5. **exec** - Execute Claude prompts using templates or raw prompts
    - Parallelization: No (Claude API rate limits)
-   - Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits`
-   - Skips archived and fork repos by default
+   - Supports built-in templates with intelligent filtering
+   - Variable substitution in prompts: `{{repo_name}}`, `{{repo_full_name}}`, etc.
+   - Pre-execution briefing with confirmation prompt (can skip with `--yes`)
+   - Templates: init (CLAUDE.md), readme (README.md)
+   - Can use raw prompts for ad-hoc tasks
+   - Force mode (`--force`) to ignore template `should_run()` logic
+   - Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits --output-format json`
    - Timeout: 5 minutes per repo
 
 6. **settings-clean** - Analyze/clean Claude Code settings

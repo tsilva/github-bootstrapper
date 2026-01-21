@@ -38,8 +38,12 @@ Examples:
   # Pull updates for existing repositories
   github-bootstrapper pull-only --workers 8
 
-  # Generate READMEs for all repos
-  github-bootstrapper readme-gen --exclude-forks
+  # Execute Claude prompts using templates
+  github-bootstrapper exec init --exclude-forks
+  github-bootstrapper exec readme --yes
+
+  # Execute raw Claude prompts
+  github-bootstrapper exec "Add a LICENSE file"
 
   # Enable sandbox mode for all repos
   github-bootstrapper sandbox-enable
@@ -55,11 +59,18 @@ Examples:
         """
     )
 
+    # Global flags
+    parser.add_argument(
+        '--list-templates',
+        action='store_true',
+        help='List available prompt templates and exit'
+    )
+
     # Subcommands (operations)
     subparsers = parser.add_subparsers(
         dest='operation',
         help='Operation to perform',
-        required=True
+        required=False
     )
 
     # Dynamically add subcommands from registry
@@ -71,11 +82,32 @@ Examples:
         _add_common_args(op_parser)
 
         # Add operation-specific arguments
-        if op_name == 'readme-gen':
+        if op_name == 'exec':
+            op_parser.add_argument(
+                'prompt',
+                help='Template name or raw prompt string'
+            )
+            op_parser.add_argument(
+                '--force',
+                action='store_true',
+                help='Execute on all repos, ignoring template should_run() logic'
+            )
+            op_parser.add_argument(
+                '--yes', '-y',
+                action='store_true',
+                help='Skip confirmation prompt'
+            )
+        elif op_name == 'readme-gen':
             op_parser.add_argument(
                 '--force',
                 action='store_true',
                 help='Regenerate README even if it already exists'
+            )
+        elif op_name == 'claude-init':
+            op_parser.add_argument(
+                '--force',
+                action='store_true',
+                help='Regenerate CLAUDE.md even if it already exists'
             )
         elif op_name == 'settings-clean':
             op_parser.add_argument(
@@ -179,6 +211,19 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
+    # Handle --list-templates flag
+    if args.list_templates:
+        from .prompt_templates import template_registry
+        print("Available prompt templates:")
+        for name, template_class in template_registry.get_all_templates().items():
+            print(f"  {name}: {template_class.description}")
+        return 0
+
+    # Check if operation is provided
+    if not args.operation:
+        parser.print_help()
+        return 1
+
     # Setup logging
     logger = setup_logging(operation=args.operation)
 
@@ -249,7 +294,13 @@ def main():
         operation_kwargs = {'clone_url_getter': github_client.get_clone_url}
 
         # Add operation-specific arguments
-        if args.operation == 'readme-gen':
+        if args.operation == 'exec':
+            operation_kwargs['prompt'] = args.prompt
+            operation_kwargs['force'] = getattr(args, 'force', False)
+            operation_kwargs['yes'] = getattr(args, 'yes', False)
+        elif args.operation == 'readme-gen':
+            operation_kwargs['force'] = getattr(args, 'force', False)
+        elif args.operation == 'claude-init':
             operation_kwargs['force'] = getattr(args, 'force', False)
         elif args.operation == 'settings-clean':
             operation_kwargs['mode'] = getattr(args, 'mode', 'analyze')
