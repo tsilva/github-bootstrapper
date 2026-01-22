@@ -4,7 +4,7 @@ import fnmatch
 import logging
 from typing import List, Dict, Any, Optional, Set
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class RepoFilter:

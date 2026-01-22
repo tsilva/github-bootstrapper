@@ -6,7 +6,7 @@ import logging
 import requests
 from typing import List, Dict, Any, Optional
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class GitHubClient:

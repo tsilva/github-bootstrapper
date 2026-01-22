@@ -7,7 +7,7 @@ import logging
 from typing import Dict, Type, List
 from .base import Operation
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class OperationRegistry:
@@ -20,7 +20,7 @@ class OperationRegistry:
 
     def _discover_operations(self) -> None:
         """Discover all operation classes in the operations package."""
-        import github_bootstrapper.operations as ops_package
+        import gitfleet.operations as ops_package
 
         # Get the package path
         package_path = ops_package.__path__
@@ -33,7 +33,7 @@ class OperationRegistry:
 
             try:
                 # Import the module
-                module = importlib.import_module(f'github_bootstrapper.operations.{module_name}')
+                module = importlib.import_module(f'gitfleet.operations.{module_name}')
 
                 # Find all Operation subclasses
                 for name, obj in inspect.getmembers(module, inspect.isclass):

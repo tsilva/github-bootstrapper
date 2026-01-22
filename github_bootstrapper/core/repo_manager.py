@@ -9,7 +9,7 @@ from .github_client import GitHubClient
 from ..operations.base import Operation, OperationResult
 from ..utils.progress import ProgressTracker
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class RepoManager:

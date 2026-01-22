@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="logo.png" alt="github-bootstrapper" width="512"/>
+  <img src="logo.png" alt="gitfleet" width="512"/>
 
-  [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/tsilva/github-bootstrapper)
+  [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/tsilva/gitfleet)
   [![Python](https://img.shields.io/badge/python-3.8+-blue)](https://www.python.org/)
   [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
   [![uv](https://img.shields.io/badge/uv-enabled-blueviolet)](https://github.com/astral-sh/uv)
@@ -15,7 +15,7 @@
 
 ## Overview
 
-github-bootstrapper is a multi-operation CLI that manages your entire GitHub repository portfolio. Clone missing repos, pull updates, execute Claude prompts with templates, enable sandbox mode, and clean settings - all with parallel processing and intelligent filtering.
+gitfleet is a multi-operation CLI that manages your entire GitHub repository portfolio. Clone missing repos, pull updates, execute Claude prompts with templates, enable sandbox mode, and clean settings - all with parallel processing and intelligent filtering.
 
 Perfect for developers managing dozens (or hundreds) of repositories who want to:
 - Keep local checkouts in sync without manual git commands
@@ -45,27 +45,27 @@ Install once, run from anywhere:
 
 ```bash
 # Clone and install globally
-git clone https://github.com/tsilva/github-bootstrapper.git
-cd github-bootstrapper
+git clone https://github.com/tsilva/gitfleet.git
+cd gitfleet
 uv tool install .
 
 # Now run from any directory containing your repos
 cd ~/repos/your-username
-github-bootstrapper status --username your-username
+gitfleet status --username your-username
 ```
 
 **Option 2: Local Installation**
 
 ```bash
 # Clone the repository
-git clone https://github.com/tsilva/github-bootstrapper.git
-cd github-bootstrapper
+git clone https://github.com/tsilva/gitfleet.git
+cd gitfleet
 
 # Install dependencies
 uv sync
 
 # Run with uv
-uv run github-bootstrapper sync
+uv run gitfleet sync
 ```
 
 ### Configuration
@@ -74,16 +74,17 @@ uv run github-bootstrapper sync
 
 ```bash
 cd ~/repos/your-username
-github-bootstrapper sync --username your-username
+gitfleet sync --username your-username
 ```
 
 **Local Installation:** Create a `.env` file (use `.env.example` as template):
 
 ```env
 GITHUB_USERNAME=your_github_username
-REPOS_BASE_DIR=/path/to/your/repos/directory  # Defaults to current directory
 GITHUB_TOKEN=your_github_token  # Optional but recommended
 ```
+
+> **Note:** Always run from the directory containing your repositories.
 
 **Why provide a token?**
 - Access private and organization repositories
@@ -95,14 +96,14 @@ GITHUB_TOKEN=your_github_token  # Optional but recommended
 **Global Installation:**
 ```bash
 cd ~/repos/your-username
-github-bootstrapper sync --username your-username --dry-run
-github-bootstrapper sync --username your-username
+gitfleet sync --username your-username --dry-run
+gitfleet sync --username your-username
 ```
 
 **Local Installation:**
 ```bash
-uv run github-bootstrapper sync --dry-run
-uv run github-bootstrapper sync
+uv run gitfleet sync --dry-run
+uv run gitfleet sync
 ```
 
 ## Operations
@@ -113,13 +114,13 @@ Clone new repositories and pull updates for existing ones.
 
 ```bash
 # Sync all repos
-github-bootstrapper sync --username your-username
+gitfleet sync --username your-username
 
 # Dry-run to preview
-github-bootstrapper sync --username your-username --dry-run
+gitfleet sync --username your-username --dry-run
 
 # Sync only private repos from a specific org
-github-bootstrapper sync --username your-username --org mycompany --private-only
+gitfleet sync --username your-username --org mycompany --private-only
 ```
 
 **Behavior:**
@@ -136,10 +137,10 @@ Clone repositories that don't exist locally (skip existing).
 
 ```bash
 # Clone all missing repos
-github-bootstrapper clone-only --username your-username
+gitfleet clone-only --username your-username
 
 # Clone only repos matching pattern
-github-bootstrapper clone-only --username your-username --pattern "my-*"
+gitfleet clone-only --username your-username --pattern "my-*"
 ```
 
 **Behavior:**
@@ -155,10 +156,10 @@ Pull updates for repositories that exist locally (skip missing).
 
 ```bash
 # Pull updates for all existing repos
-github-bootstrapper pull-only --username your-username
+gitfleet pull-only --username your-username
 
 # Use 8 parallel workers
-github-bootstrapper pull-only --username your-username --workers 8
+gitfleet pull-only --username your-username --workers 8
 ```
 
 **Behavior:**
@@ -175,13 +176,13 @@ Report synchronization status of all repositories.
 
 ```bash
 # Check status of all repos
-github-bootstrapper status --username your-username
+gitfleet status --username your-username
 
 # Check specific repos
-github-bootstrapper status --username your-username --repo repo1 --repo repo2
+gitfleet status --username your-username --repo repo1 --repo repo2
 
 # Check only private repos
-github-bootstrapper status --username your-username --private-only
+gitfleet status --username your-username --private-only
 ```
 
 **Behavior:**
@@ -198,19 +199,19 @@ Execute Claude prompts using built-in templates or raw prompts.
 
 ```bash
 # List available templates
-github-bootstrapper --list-templates
+gitfleet --list-templates
 
 # Execute using built-in templates
-github-bootstrapper claude-exec init --username your-username
+gitfleet claude-exec init --username your-username
 
 # Execute raw prompts
-github-bootstrapper claude-exec "Add a LICENSE file" --username your-username
+gitfleet claude-exec "Add a LICENSE file" --username your-username
 
 # Force execution (ignore template should_run logic)
-github-bootstrapper claude-exec init --username your-username --force
+gitfleet claude-exec init --username your-username --force
 
 # Skip confirmation prompt
-github-bootstrapper claude-exec init --username your-username --yes
+gitfleet claude-exec init --username your-username --yes
 ```
 
 **Built-in Templates:**
@@ -236,10 +237,10 @@ Enable Claude Code sandbox mode with auto-allow bash for all repos.
 
 ```bash
 # Enable sandbox for all repos
-github-bootstrapper sandbox-enable --username your-username
+gitfleet sandbox-enable --username your-username
 
 # Enable for specific repos
-github-bootstrapper sandbox-enable --username your-username --repo repo1 --repo repo2
+gitfleet sandbox-enable --username your-username --repo repo1 --repo repo2
 ```
 
 **Behavior:**
@@ -256,13 +257,13 @@ Analyze and clean Claude Code permission whitelists.
 
 ```bash
 # Analyze settings (default mode)
-github-bootstrapper settings-clean --username your-username
+gitfleet settings-clean --username your-username
 
 # Clean settings interactively
-github-bootstrapper settings-clean --username your-username --mode clean
+gitfleet settings-clean --username your-username --mode clean
 
 # Auto-fix issues
-github-bootstrapper settings-clean --username your-username --mode auto-fix
+gitfleet settings-clean --username your-username --mode auto-fix
 ```
 
 **Behavior:**
@@ -282,13 +283,13 @@ Sync GitHub repository descriptions with README taglines.
 
 ```bash
 # Preview changes (dry-run)
-github-bootstrapper description-sync --username your-username --dry-run
+gitfleet description-sync --username your-username --dry-run
 
 # Sync descriptions for all repos
-github-bootstrapper description-sync --username your-username
+gitfleet description-sync --username your-username
 
 # Sync for specific repos
-github-bootstrapper description-sync --username your-username --repo repo1 --repo repo2
+gitfleet description-sync --username your-username --repo repo1 --repo repo2
 ```
 
 **Tagline Extraction (priority order):**
@@ -324,16 +325,16 @@ All operations support powerful filtering options:
 
 ```bash
 # Sync only private repos from your company
-github-bootstrapper sync --username your-username --org mycompany --private-only
+gitfleet sync --username your-username --org mycompany --private-only
 
 # Execute prompts for your personal projects (exclude forks)
-github-bootstrapper claude-exec "Update copyright year" --username your-username --pattern "my-*"
+gitfleet claude-exec "Update copyright year" --username your-username --pattern "my-*"
 
 # Enable sandbox only for active development repos
-github-bootstrapper sandbox-enable --username your-username
+gitfleet sandbox-enable --username your-username
 
 # Pull updates for specific repos
-github-bootstrapper pull-only --username your-username --repo web-app --repo api-server
+gitfleet pull-only --username your-username --repo web-app --repo api-server
 ```
 
 ## Examples
@@ -345,49 +346,49 @@ github-bootstrapper pull-only --username your-username --repo web-app --repo api
 cd ~/repos/your-username
 
 # Morning: update all repos
-github-bootstrapper pull-only --username your-username
+gitfleet pull-only --username your-username
 
 # Check what's new (dry-run)
-github-bootstrapper clone-only --username your-username --dry-run
+gitfleet clone-only --username your-username --dry-run
 
 # Clone any new repos
-github-bootstrapper clone-only --username your-username
+gitfleet clone-only --username your-username
 ```
 
 ### Check Repository Status
 
 ```bash
 # See sync status of all repos
-github-bootstrapper status --username your-username
+gitfleet status --username your-username
 
 # Check specific repos
-github-bootstrapper status --username your-username --repo project1 --repo project2
+gitfleet status --username your-username --repo project1 --repo project2
 
 # Check only private repos
-github-bootstrapper status --username your-username --private-only
+gitfleet status --username your-username --private-only
 ```
 
 ### Bulk Configuration
 
 ```bash
 # Enable sandbox mode everywhere
-github-bootstrapper sandbox-enable --username your-username
+gitfleet sandbox-enable --username your-username
 
 # Analyze all Claude settings
-github-bootstrapper settings-clean --username your-username --mode analyze
+gitfleet settings-clean --username your-username --mode analyze
 
 # Auto-fix issues in settings
-github-bootstrapper settings-clean --username your-username --mode auto-fix
+gitfleet settings-clean --username your-username --mode auto-fix
 ```
 
 ### Documentation Sprint
 
 ```bash
 # Initialize CLAUDE.md for all projects
-github-bootstrapper claude-exec init --username your-username
+gitfleet claude-exec init --username your-username
 
 # Execute raw prompt for documentation
-github-bootstrapper claude-exec "/readme-generator" --username your-username
+gitfleet claude-exec "/readme-generator" --username your-username
 ```
 
 ### Fresh Machine Setup
@@ -397,13 +398,13 @@ github-bootstrapper claude-exec "/readme-generator" --username your-username
 cd ~/repos/your-username
 
 # Clone all your repos
-github-bootstrapper clone-only --username your-username
+gitfleet clone-only --username your-username
 
 # Enable sandbox mode for all
-github-bootstrapper sandbox-enable --username your-username
+gitfleet sandbox-enable --username your-username
 
 # Initialize CLAUDE.md files
-github-bootstrapper claude-exec init --username your-username
+gitfleet claude-exec init --username your-username
 ```
 
 ## Global Options
@@ -412,7 +413,6 @@ All operations support these flags:
 
 | Flag | Description |
 |------|-------------|
-| `--repos-dir PATH` | Override REPOS_BASE_DIR |
 | `--username USER` | Override GITHUB_USERNAME |
 | `--token TOKEN` | Override GITHUB_TOKEN |
 | `--workers N` | Number of parallel workers (default: CPU count) |
@@ -421,10 +421,10 @@ All operations support these flags:
 
 ## Architecture
 
-github-bootstrapper uses an extensible **Operation Framework** based on the Strategy Pattern:
+gitfleet uses an extensible **Operation Framework** based on the Strategy Pattern:
 
 ```
-github_bootstrapper/
+gitfleet/
 ├── core/
 │   ├── github_client.py    # GitHub API with pagination
 │   ├── repo_manager.py     # Orchestrates operations
@@ -565,15 +565,15 @@ Contributions are welcome! This project follows an extensible architecture that 
 
 ```bash
 # Clone and install
-git clone https://github.com/tsilva/github-bootstrapper.git
-cd github-bootstrapper
+git clone https://github.com/tsilva/gitfleet.git
+cd gitfleet
 uv sync
 
 # Run tests (if available)
 uv run pytest
 
 # Try your changes
-uv run github-bootstrapper --help
+uv run gitfleet --help
 ```
 
 ### Contribution Ideas

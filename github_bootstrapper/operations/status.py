@@ -6,7 +6,7 @@ from collections import defaultdict
 from .base import Operation, OperationResult, OperationStatus
 from ..utils.git import repo_exists, get_sync_status
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class StatusOperation(Operation):

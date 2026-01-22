@@ -35,7 +35,7 @@ def setup_logging(operation: str = "sync") -> logging.Logger:
         force=True  # Reset any existing configuration
     )
 
-    logger = logging.getLogger('github_bootstrapper')
+    logger = logging.getLogger('gitfleet')
     logger.info(f"Starting GitHub {operation} operation")
     logger.info(f"Log file: {log_file}")
 
@@ -48,4 +48,4 @@ def get_logger() -> logging.Logger:
     Returns:
         Logger instance
     """
-    return logging.getLogger('github_bootstrapper')
+    return logging.getLogger('gitfleet')

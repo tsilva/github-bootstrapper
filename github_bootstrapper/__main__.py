@@ -47,37 +47,37 @@ def create_parser() -> argparse.ArgumentParser:
         Configured ArgumentParser
     """
     parser = argparse.ArgumentParser(
-        prog='github-bootstrapper',
+        prog='gitfleet',
         description='Multi-operation GitHub repository manager',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Sync all repositories (clone + pull)
-  github-bootstrapper sync
+  gitfleet sync
 
   # Clone only missing repositories
-  github-bootstrapper clone-only --dry-run
+  gitfleet clone-only --dry-run
 
   # Pull updates for existing repositories
-  github-bootstrapper pull-only --workers 8
+  gitfleet pull-only --workers 8
 
   # Execute Claude prompts using templates (forks/archived excluded by default)
-  github-bootstrapper claude-exec init
+  gitfleet claude-exec init
 
   # Execute raw Claude prompts
-  github-bootstrapper claude-exec "/readme-generator"
+  gitfleet claude-exec "/readme-generator"
 
   # Enable sandbox mode for all repos
-  github-bootstrapper sandbox-enable
+  gitfleet sandbox-enable
 
   # Clean Claude settings
-  github-bootstrapper settings-clean --mode analyze
+  gitfleet settings-clean --mode analyze
 
   # Filter by organization
-  github-bootstrapper sync --org mycompany --private-only
+  gitfleet sync --org mycompany --private-only
 
   # Filter by pattern
-  github-bootstrapper readme-gen --pattern "my-*"
+  gitfleet readme-gen --pattern "my-*"
         """
     )
 
@@ -150,10 +150,6 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     """
     # Global configuration
     config_group = parser.add_argument_group('configuration')
-    config_group.add_argument(
-        '--repos-dir',
-        help='Base directory for repositories (default: current directory, overrides REPOS_BASE_DIR)'
-    )
     config_group.add_argument(
         '--username',
         help='GitHub username (overrides GITHUB_USERNAME)'
@@ -253,7 +249,6 @@ def main():
         # Load configuration
         config = Config.from_env_and_args(
             username=args.username,
-            repos_dir=args.repos_dir,
             token=args.token,
             max_workers=args.workers,
             sequential=args.sequential

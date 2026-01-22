@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 from .base import Operation, OperationResult, OperationStatus
 from ..utils.git import repo_exists
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 # GitHub description character limit
 MAX_DESCRIPTION_LENGTH = 350

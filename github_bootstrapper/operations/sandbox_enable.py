@@ -7,7 +7,7 @@ from typing import Dict, Any
 from .base import Operation, OperationResult, OperationStatus
 from ..utils.git import repo_exists
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class SandboxEnableOperation(Operation):

@@ -1,5 +1,5 @@
 [project]
-name = "github-bootstrapper"
+name = "gitfleet"
 version = "0.1.0"
 description = "Sync all your GitHub repositories locally with parallel processing and smart change detection"
 readme = "README.md"
@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-github-bootstrapper = "github_bootstrapper.__main__:main"
+gitfleet = "gitfleet.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -7,7 +7,7 @@ import logging
 from typing import Dict, Type, List, Optional
 from .base import PromptTemplate
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class TemplateRegistry:
@@ -20,7 +20,7 @@ class TemplateRegistry:
 
     def _discover_templates(self) -> None:
         """Discover all template classes in the prompt_templates package."""
-        import github_bootstrapper.prompt_templates as templates_package
+        import gitfleet.prompt_templates as templates_package
 
         # Get the package path
         package_path = templates_package.__path__
@@ -33,7 +33,7 @@ class TemplateRegistry:
 
             try:
                 # Import the module
-                module = importlib.import_module(f'github_bootstrapper.prompt_templates.{module_name}')
+                module = importlib.import_module(f'gitfleet.prompt_templates.{module_name}')
 
                 # Find all PromptTemplate subclasses
                 for name, obj in inspect.getmembers(module, inspect.isclass):

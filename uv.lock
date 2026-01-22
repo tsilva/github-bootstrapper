@@ -380,7 +380,7 @@ wheels = [
 ]
 
 [[package]]
-name = "github-bootstrapper"
+name = "gitfleet"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

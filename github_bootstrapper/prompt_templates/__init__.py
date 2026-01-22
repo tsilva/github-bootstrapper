@@ -1,4 +1,4 @@
-"""Claude prompt templates for github-bootstrapper."""
+"""Claude prompt templates for gitfleet."""
 
 from .registry import template_registry
 from .base import PromptTemplate

@@ -5,7 +5,7 @@ import logging
 from typing import List, Optional
 from ..operations.base import OperationResult, OperationStatus
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class ProgressTracker:

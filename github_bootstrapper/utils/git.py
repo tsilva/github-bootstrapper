@@ -5,7 +5,7 @@ import subprocess
 import logging
 from typing import Optional, Dict, Any
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 def has_unstaged_changes(repo_path: str) -> bool:

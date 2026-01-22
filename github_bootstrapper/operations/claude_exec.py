@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 from .base import Operation, OperationResult, OperationStatus
 from ..prompt_templates import template_registry, RawPromptTemplate
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class ClaudeExecOperation(Operation):

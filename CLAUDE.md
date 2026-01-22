@@ -28,7 +28,7 @@ The `claude-exec` operation supports built-in prompt templates with intelligent 
 You can also execute ad-hoc prompts by providing any text that doesn't match a template name. Raw prompts run on all locally cloned repositories (unless filtered).
 
 **Extensibility:**
-Add new templates by creating a Python file in `github_bootstrapper/prompt_templates/` that inherits from `PromptTemplate`. The registry auto-discovers new templates via introspection.
+Add new templates by creating a Python file in `gitfleet/prompt_templates/` that inherits from `PromptTemplate`. The registry auto-discovers new templates via introspection.
 
 ## Development Setup
 
@@ -47,44 +47,45 @@ uv tool install .
 Create a `.env` file (use `.env.example` as template):
 ```
 GITHUB_USERNAME=your_github_username
-REPOS_BASE_DIR=/path/to/your/repos/directory  # Defaults to current directory
 GITHUB_TOKEN=your_github_token  # Optional but recommended
 ```
+
+**Important:** Always run from the directory containing your repositories.
 
 Run operations (examples use global installation; for local dev, prefix with `uv run`):
 ```bash
 # Check repository status
-github-bootstrapper status --username your-username
+gitfleet status --username your-username
 
 # Sync all repositories
-github-bootstrapper sync --username your-username
+gitfleet sync --username your-username
 
 # Clone only missing repositories
-github-bootstrapper clone-only --username your-username --dry-run
+gitfleet clone-only --username your-username --dry-run
 
 # Pull updates for existing repositories
-github-bootstrapper pull-only --username your-username
+gitfleet pull-only --username your-username
 
 # List available prompt templates
-github-bootstrapper --list-templates
+gitfleet --list-templates
 
 # Execute using built-in templates (forks excluded by default)
-github-bootstrapper claude-exec init --username your-username
+gitfleet claude-exec init --username your-username
 
 # Execute using raw prompts
-github-bootstrapper claude-exec "Add a LICENSE file" --username your-username
+gitfleet claude-exec "Add a LICENSE file" --username your-username
 
 # Force execution (ignore should_run logic)
-github-bootstrapper claude-exec readme --force --username your-username
+gitfleet claude-exec readme --force --username your-username
 
 # Enable sandbox mode
-github-bootstrapper sandbox-enable --username your-username
+gitfleet sandbox-enable --username your-username
 
 # Clean Claude settings
-github-bootstrapper settings-clean --username your-username --mode analyze
+gitfleet settings-clean --username your-username --mode analyze
 
 # Sync repo descriptions with README taglines
-github-bootstrapper description-sync --username your-username --dry-run
+gitfleet description-sync --username your-username --dry-run
 ```
 
 ## Architecture
@@ -92,8 +93,8 @@ github-bootstrapper description-sync --username your-username --dry-run
 ### Project Structure
 
 ```
-github-bootstrapper/
-├── github_bootstrapper/             # Core package
+gitfleet/
+├── gitfleet/             # Core package
 │   ├── __main__.py                 # CLI entry point with argparse
 │   ├── config.py                   # Configuration management
 │   ├── core/
@@ -161,8 +162,9 @@ github-bootstrapper/
 
 - `Config` class merges .env and CLI arguments
 - CLI arguments override environment variables
-- Required: `GITHUB_USERNAME`, `REPOS_BASE_DIR`
+- Required: `GITHUB_USERNAME`
 - Optional: `GITHUB_TOKEN` (enables auth mode and parallelization)
+- Always operates on current working directory
 
 ### Logging
 

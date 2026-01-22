@@ -5,7 +5,7 @@ from typing import Dict, Any
 from .base import Operation, OperationResult, OperationStatus
 from ..utils.git import repo_exists, clone_repo
 
-logger = logging.getLogger('github_bootstrapper')
+logger = logging.getLogger('gitfleet')
 
 
 class CloneOnlyOperation(Operation):

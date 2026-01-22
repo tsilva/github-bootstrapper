@@ -23,7 +23,6 @@ class Config:
     def from_env_and_args(
         cls,
         username: Optional[str] = None,
-        repos_dir: Optional[str] = None,
         token: Optional[str] = None,
         max_workers: Optional[int] = None,
         sequential: bool = False
@@ -34,7 +33,6 @@ class Config:
 
         Args:
             username: GitHub username (overrides GITHUB_USERNAME)
-            repos_dir: Base directory for repos (overrides REPOS_BASE_DIR)
             token: GitHub token (overrides GITHUB_TOKEN)
             max_workers: Maximum parallel workers
             sequential: Force sequential processing
@@ -47,7 +45,6 @@ class Config:
         """
         # Merge with environment variables (CLI args take precedence)
         final_username = username or os.getenv('GITHUB_USERNAME')
-        final_repos_dir = repos_dir or os.getenv('REPOS_BASE_DIR') or os.getcwd()
         final_token = token or os.getenv('GITHUB_TOKEN')
 
         # Validate required fields
@@ -57,14 +54,9 @@ class Config:
                 "Set GITHUB_USERNAME in .env or use --username"
             )
 
-        if not os.path.isdir(final_repos_dir):
-            raise ValueError(
-                f"REPOS_BASE_DIR '{final_repos_dir}' does not exist or is not a directory"
-            )
-
         return cls(
             github_username=final_username,
-            repos_base_dir=final_repos_dir,
+            repos_base_dir=os.getcwd(),
             github_token=final_token,
             max_workers=max_workers,
             sequential=sequential
