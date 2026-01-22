@@ -64,7 +64,7 @@ class LogoGeneratorPipeline(Pipeline):
 class SettingsOptimizerPipeline(Pipeline):
     """Optimize Claude settings using claude-settings-optimizer skill."""
 
-    name = "settings-optimizer"
+    name = "claude-settings-optimizer"
     description = "Optimize Claude Code settings using claude-settings-optimizer skill"
     requires_token = False
     safe_parallel = False  # Sequential for Claude API rate limits

@@ -75,7 +75,7 @@ Examples:
   gitfleet settings-clean --mode analyze
 
   # Use skill pipelines (new)
-  gitfleet pipeline settings-optimizer --mode analyze
+  gitfleet pipeline claude-settings-optimizer --mode analyze
   gitfleet pipeline readme-generator
   gitfleet pipeline logo-generator
 
@@ -297,7 +297,7 @@ def _execute_pipeline(args, config, github_client, repos, logger):
             pipeline_kwargs['condition'] = condition
 
     # Pipelines that support --mode
-    mode_pipelines = ['settings-optimizer', 'settings-clean']
+    mode_pipelines = ['claude-settings-optimizer', 'settings-clean']
     if pipeline_name in mode_pipelines:
         mode = getattr(args, 'mode', 'analyze')
         pipeline_kwargs['mode'] = mode
