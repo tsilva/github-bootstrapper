@@ -17,6 +17,29 @@ from .utils.filters import RepoFilter
 from .utils.progress import print_summary
 
 
+def is_inside_git_repo(path: str) -> bool:
+    """Check if a path is inside a git repository.
+
+    Args:
+        path: Directory path to check
+
+    Returns:
+        True if the path is inside a git repository, False otherwise
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        return result.returncode == 0 and result.stdout.strip() == "true"
+    except FileNotFoundError:
+        return False
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create CLI argument parser.
 
@@ -240,6 +263,15 @@ def main():
         logger.info(f"  Username: {config.github_username}")
         logger.info(f"  Base directory: {config.repos_base_dir}")
         logger.info(f"  Authenticated: {config.is_authenticated}")
+
+        # Check if running from inside a git repository
+        repos_dir = config.repos_base_dir
+        if is_inside_git_repo(repos_dir):
+            logger.error(
+                f"Cannot run from inside a git repository: {repos_dir}\n"
+                "Please run from a parent directory containing your repositories."
+            )
+            return 1
 
         # Create GitHub client
         github_client = GitHubClient(

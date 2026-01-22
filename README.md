@@ -25,7 +25,7 @@ Perfect for developers managing dozens (or hundreds) of repositories who want to
 
 ## Features
 
-- **7 Powerful Operations** - sync, clone-only, pull-only, status, claude-exec, sandbox-enable, settings-clean
+- **8 Powerful Operations** - sync, clone-only, pull-only, status, claude-exec, sandbox-enable, settings-clean, description-sync
 - **Parallel Processing** - utilize all CPU cores for thread-safe operations
 - **Flexible Filtering** - target repos by name, org, pattern, visibility, or exclude forks/archived
 - **Dry-Run Mode** - preview changes before executing
@@ -274,6 +274,38 @@ github-bootstrapper settings-clean --username your-username --mode auto-fix
 **Requirements:**
 - settings-cleaner skill installed
 
+---
+
+### 8. description-sync
+
+Sync GitHub repository descriptions with README taglines.
+
+```bash
+# Preview changes (dry-run)
+github-bootstrapper description-sync --username your-username --dry-run
+
+# Sync descriptions for all repos
+github-bootstrapper description-sync --username your-username
+
+# Sync for specific repos
+github-bootstrapper description-sync --username your-username --repo repo1 --repo repo2
+```
+
+**Tagline Extraction (priority order):**
+1. Bold text (`**...**`) within `<div align="center">` block
+2. First paragraph after `# Title`
+
+**Behavior:**
+- Updates GitHub repo description via `gh repo edit`
+- Truncates descriptions exceeding 350 characters
+- Skips archived repos (can't update)
+- Skips repos without README.md
+- Skips when description already matches tagline
+- Thread-safe parallel execution
+
+**Requirements:**
+- `gh` CLI installed and authenticated (`gh auth login`)
+
 ## Filtering
 
 All operations support powerful filtering options:
@@ -406,7 +438,8 @@ github_bootstrapper/
 │   ├── status.py           # Status reporting
 │   ├── claude_exec.py      # Execute Claude prompts
 │   ├── settings_clean.py   # Settings cleanup
-│   └── sandbox_enable.py   # Sandbox enablement
+│   ├── sandbox_enable.py   # Sandbox enablement
+│   └── description_sync.py # Description sync
 ├── prompt_templates/
 │   ├── base.py             # Abstract PromptTemplate class
 │   ├── registry.py         # Template auto-discovery

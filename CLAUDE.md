@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports seven operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), claude-exec (execute Claude prompts using templates or raw prompts), settings-clean (Claude Code settings cleanup), and sandbox-enable (enable Claude Code sandbox mode). Features include parallel processing, flexible filtering, and an extensible operation framework.
+GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports eight operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), claude-exec (execute Claude prompts using templates or raw prompts), settings-clean (Claude Code settings cleanup), sandbox-enable (enable Claude Code sandbox mode), and description-sync (sync GitHub repo description with README tagline). Features include parallel processing, flexible filtering, and an extensible operation framework.
 
 ## Prompt Templates
 
@@ -82,6 +82,9 @@ github-bootstrapper sandbox-enable --username your-username
 
 # Clean Claude settings
 github-bootstrapper settings-clean --username your-username --mode analyze
+
+# Sync repo descriptions with README taglines
+github-bootstrapper description-sync --username your-username --dry-run
 ```
 
 ## Architecture
@@ -106,7 +109,8 @@ github-bootstrapper/
 │   │   ├── status.py               # Repository status operation
 │   │   ├── claude_exec.py          # Execute Claude prompts
 │   │   ├── settings_clean.py       # Settings cleanup via script
-│   │   └── sandbox_enable.py       # Sandbox mode enablement
+│   │   ├── sandbox_enable.py       # Sandbox mode enablement
+│   │   └── description_sync.py     # Sync repo description with README
 │   ├── prompt_templates/
 │   │   ├── base.py                 # Abstract PromptTemplate class
 │   │   ├── registry.py             # Template auto-discovery
@@ -207,6 +211,14 @@ github-bootstrapper/
    - Parallelization: Yes (isolated JSON files)
    - Direct JSON manipulation
    - Sets: `{"sandbox": {"enabled": true, "autoAllowBashIfSandboxed": true}}`
+
+8. **description-sync** - Sync GitHub repo description with README tagline
+   - Parallelization: Yes (independent gh CLI calls)
+   - Extracts tagline from README.md (bold text in centered div, or first paragraph after title)
+   - Updates GitHub repo description via `gh repo edit`
+   - Truncates descriptions > 350 chars
+   - Skips archived repos, repos without README, or when description already matches
+   - Requires: `gh` CLI installed and authenticated
 
 ## Important Implementation Details
 
