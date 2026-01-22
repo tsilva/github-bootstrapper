@@ -6,7 +6,7 @@ from typing import List, Optional, Union, Tuple, TYPE_CHECKING
 
 from ..predicates.base import Predicate, AllOf, AlwaysTrue
 from ..actions.base import Action
-from ..core.types import RepoContext, ActionResult, Status
+from ..core.types import RepoContext, ActionResult, Status, OperationResult
 
 if TYPE_CHECKING:
     pass
@@ -254,6 +254,16 @@ class Pipeline:
         if self._steps:
             parts.append(f"  Steps: {len(self._steps)}")
         return "\n".join(parts)
+
+    def post_batch_hook(self, results: List['OperationResult']) -> None:
+        """Called after all repositories have been processed.
+
+        Override this method for aggregation, summary reports, or cleanup.
+
+        Args:
+            results: List of OperationResult from all processed repositories
+        """
+        pass
 
 
 class PipelineBuilder:

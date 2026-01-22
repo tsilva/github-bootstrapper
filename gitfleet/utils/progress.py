@@ -3,7 +3,7 @@
 import sys
 import logging
 from typing import List, Optional
-from ..operations.base import OperationResult, OperationStatus
+from ..core.types import OperationResult, OperationStatus
 
 logger = logging.getLogger('gitfleet')
 

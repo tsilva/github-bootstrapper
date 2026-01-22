@@ -4,31 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-gitfleet is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports eight operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), claude-exec (execute Claude prompts using templates or raw prompts), settings-clean (Claude Code settings cleanup), sandbox-enable (enable Claude Code sandbox mode), and description-sync (sync GitHub repo description with README tagline). Features include parallel processing, flexible filtering, and an extensible operation framework.
-
-## Prompt Templates
-
-The `claude-exec` operation supports built-in prompt templates with intelligent filtering logic:
-
-**Built-in Templates:**
-- **init** - Initialize CLAUDE.md files (skips archived, forks, existing CLAUDE.md)
-
-**Template Features:**
-- Intelligent filtering via `should_run()` logic (can be overridden with `--force`)
-- Variable substitution support:
-  - `{{repo_name}}` - Repository name
-  - `{{repo_full_name}}` - Full repository name (owner/repo)
-  - `{{default_branch}}` - Default branch name
-  - `{{description}}` - Repository description
-  - `{{language}}` - Primary language
-- Pre-execution briefing with confirmation prompt
-- Sequential execution to respect Claude API rate limits
-
-**Raw Prompts:**
-You can also execute ad-hoc prompts by providing any text that doesn't match a template name. Raw prompts run on all locally cloned repositories (unless filtered).
-
-**Extensibility:**
-Add new templates by creating a Python file in `gitfleet/prompt_templates/` that inherits from `PromptTemplate`. The registry auto-discovers new templates via introspection.
+gitfleet is a multi-operation repository management system that performs bulk operations on GitHub repositories using a composable pipeline architecture. It supports eight pipelines: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), claude-exec (execute Claude prompts), settings-clean (Claude Code settings cleanup), sandbox-enable (enable Claude Code sandbox mode), and description-sync (sync GitHub repo description with README tagline). Features include parallel processing, flexible filtering, and an extensible pipeline framework.
 
 ## Development Setup
 
@@ -52,7 +28,7 @@ GITHUB_TOKEN=your_github_token  # Optional but recommended
 
 **Important:** Always run from the directory containing your repositories.
 
-Run operations (examples use global installation; for local dev, prefix with `uv run`):
+Run pipelines (examples use global installation; for local dev, prefix with `uv run`):
 ```bash
 # Check repository status
 gitfleet status --username your-username
@@ -66,17 +42,12 @@ gitfleet clone-only --username your-username --dry-run
 # Pull updates for existing repositories
 gitfleet pull-only --username your-username
 
-# List available prompt templates
-gitfleet --list-templates
+# List available pipelines
+gitfleet --list-pipelines
 
-# Execute using built-in templates (forks excluded by default)
-gitfleet claude-exec init --username your-username
-
-# Execute using raw prompts
+# Execute Claude prompts (raw prompts or skills)
 gitfleet claude-exec "Add a LICENSE file" --username your-username
-
-# Force execution (ignore should_run logic)
-gitfleet claude-exec readme --force --username your-username
+gitfleet claude-exec "/readme-generator" --repo my-repo
 
 # Enable sandbox mode
 gitfleet sandbox-enable --username your-username
@@ -99,43 +70,26 @@ gitfleet/
 │   ├── config.py                   # Configuration management
 │   ├── core/
 │   │   ├── github_client.py        # GitHub API client
-│   │   ├── repo_manager.py         # Operation orchestrator
 │   │   ├── logger.py               # Logging utilities
-│   │   ├── types.py                # Core types (RepoContext, ActionResult, Status)
+│   │   ├── types.py                # Core types (RepoContext, ActionResult, Status, OperationResult)
 │   │   └── registry.py             # Unified generic registry
-│   ├── predicates/                 # Composable predicates (NEW)
+│   ├── predicates/                 # Composable predicates
 │   │   ├── base.py                 # Predicate base class and combinators
 │   │   └── core.py                 # Core predicates (RepoExists, RepoClean, etc.)
-│   ├── actions/                    # Single-responsibility actions (NEW)
+│   ├── actions/                    # Single-responsibility actions
 │   │   ├── base.py                 # Action base class
 │   │   ├── git.py                  # Git actions (CloneAction, PullAction)
 │   │   ├── json_ops.py             # JSON manipulation actions
 │   │   ├── subprocess_ops.py       # Subprocess actions (ClaudeCliAction, etc.)
 │   │   └── description_sync.py     # Description sync action
-│   ├── pipelines/                  # Composable pipelines (NEW)
+│   ├── pipelines/                  # Composable pipelines
 │   │   ├── base.py                 # Pipeline class with fluent API
 │   │   ├── executor.py             # PipelineExecutor
 │   │   ├── registry.py             # Pipeline registry
-│   │   ├── adapter.py              # Pipeline-to-Operation adapter
 │   │   ├── git_ops.py              # Git pipelines (sync, clone-only, pull-only)
 │   │   ├── settings_ops.py         # Settings pipelines (sandbox-enable, settings-clean)
+│   │   ├── status_ops.py           # Status pipeline
 │   │   └── subprocess_ops.py       # Subprocess pipelines (description-sync, claude-exec)
-│   ├── operations/                 # Legacy operations (still supported)
-│   │   ├── base.py                 # Abstract Operation class
-│   │   ├── registry.py             # Auto-discovery via introspection
-│   │   ├── sync.py                 # Clone + pull operation
-│   │   ├── clone_only.py           # Clone-only operation
-│   │   ├── pull_only.py            # Pull-only operation
-│   │   ├── status.py               # Repository status operation
-│   │   ├── claude_exec.py          # Execute Claude prompts
-│   │   ├── settings_clean.py       # Settings cleanup via script
-│   │   ├── sandbox_enable.py       # Sandbox mode enablement
-│   │   └── description_sync.py     # Sync repo description with README
-│   ├── prompt_templates/
-│   │   ├── base.py                 # Abstract PromptTemplate class
-│   │   ├── registry.py             # Template auto-discovery
-│   │   ├── init.py                 # CLAUDE.md initialization template
-│   │   └── raw.py                  # Raw prompt template
 │   └── utils/
 │       ├── git.py                  # Git helpers
 │       ├── progress.py             # Progress tracking
@@ -144,7 +98,7 @@ gitfleet/
 └── uv.lock                         # Dependency lock file
 ```
 
-### Pipeline Architecture (New)
+### Pipeline Architecture
 
 gitfleet uses a composable pipeline architecture that separates concerns into:
 - **Predicates** - When to run (composable conditions)
@@ -155,19 +109,8 @@ gitfleet uses a composable pipeline architecture that separates concerns into:
 - `gitfleet/predicates/` - Composable predicates (RepoExists, RepoClean, NotArchived, etc.)
 - `gitfleet/actions/` - Single-responsibility actions (CloneAction, PullAction, JsonPatchAction, etc.)
 - `gitfleet/pipelines/` - Pipeline definitions and executor
-- `gitfleet/core/types.py` - Core types (RepoContext, ActionResult, Status)
+- `gitfleet/core/types.py` - Core types (RepoContext, ActionResult, Status, OperationResult)
 - `gitfleet/core/registry.py` - Unified generic registry
-
-**Using Pipelines:**
-```bash
-# List available pipelines
-gitfleet --list-pipelines
-
-# Execute a pipeline
-gitfleet pipeline sync --username your-username
-gitfleet pipeline clone-only --dry-run --username your-username
-gitfleet pipeline sandbox-enable --force --username your-username
-```
 
 **Creating New Pipelines:**
 ```python
@@ -206,20 +149,13 @@ RepoExists() | FileExists("README.md")  # OR
 ~RepoExists()  # NOT
 ```
 
-### Operation Framework (Legacy)
-
-**Strategy Pattern with Auto-Discovery:**
-- `Operation` base class defines interface: `execute()`, `should_skip()`, hooks
-- Each operation is self-contained, isolated, and testable
-- `OperationRegistry` auto-discovers operations via Python introspection
-- `RepoManager` orchestrates parallel/sequential execution
-
-**Adding New Operations:**
-1. Create file in `operations/` directory
-2. Inherit from `Operation` base class
-3. Implement `execute()` method
-4. Set class attributes: `name`, `description`, `requires_token`, `safe_parallel`
-5. Registry auto-discovers it - no other changes needed!
+**Adding New Pipelines:**
+1. Create a pipeline class in the appropriate `pipelines/*.py` file
+2. Inherit from `Pipeline` base class
+3. Set class attributes: `name`, `description`, `requires_token`, `safe_parallel`
+4. Define predicates with `when()` and actions with `then()` in `__init__`
+5. Register the pipeline in `pipelines/registry.py`
+6. Optionally override `post_batch_hook()` for aggregation/summary output
 
 ### Core Components
 
@@ -229,11 +165,12 @@ RepoExists() | FileExists("README.md")  # OR
 - Unauthenticated mode: `/users/{username}/repos` + org repos
 - Clone URL selection: SSH when authenticated, HTTPS otherwise
 
-**RepoManager** (`core/repo_manager.py`):
-- Orchestrates operation execution
-- Parallel execution with ThreadPoolExecutor (authenticated mode)
-- Sequential execution (unauthenticated or non-thread-safe operations)
-- Exception handling and result collection
+**PipelineExecutor** (`pipelines/executor.py`):
+- Orchestrates pipeline execution
+- Parallel execution with ThreadPoolExecutor
+- Sequential execution for rate-limited operations
+- Pre-filters repositories using pipeline predicates
+- Calls `post_batch_hook()` for aggregation after all repos processed
 
 **RepoFilter** (`utils/filters.py`):
 - Filter by: repo names, orgs, patterns (glob), visibility, fork/archived status
@@ -249,11 +186,11 @@ RepoExists() | FileExists("README.md")  # OR
 
 ### Logging
 
-- Operation-specific log files: `logs/github_{operation}_YYYYMMDD_HHMMSS.log`
+- Pipeline-specific log files: `logs/github_{pipeline}_YYYYMMDD_HHMMSS.log`
 - Dual output to both file and console
 - Progress tracking with live updates: `[████████░░] 80% (40/50) ✓35 ⊘3 ✗2`
 
-## Operations Overview
+## Pipelines Overview
 
 1. **sync** - Clone new repos + pull existing (default behavior)
    - Parallelization: Yes (thread-safe)
@@ -269,18 +206,15 @@ RepoExists() | FileExists("README.md")  # OR
 
 4. **status** - Report repository synchronization status
    - Parallelization: Yes (read-only operation)
-   - Categorizes repos: In sync, Unpushed changes, Unpulled changes, Diverged, Uncommitted changes, Not cloned
+   - Categorizes repos: In sync, Unpushed changes, Unpulled changes, Diverged, Uncommitted changes, Detached HEAD, No remote tracking, Not cloned
    - Fetches from remote to ensure accurate status
-   - Provides grouped summary output
+   - Provides grouped summary output via `post_batch_hook()`
 
-5. **claude-exec** - Execute Claude prompts using templates or raw prompts
+5. **claude-exec** - Execute Claude prompts
    - Parallelization: No (Claude API rate limits)
-   - Supports built-in templates with intelligent filtering
-   - Variable substitution in prompts: `{{repo_name}}`, `{{repo_full_name}}`, etc.
+   - Supports raw prompts and skill invocations (e.g., "/readme-generator")
    - Pre-execution briefing with confirmation prompt (can skip with `--yes`)
-   - Templates: init (CLAUDE.md)
-   - Can use raw prompts for ad-hoc tasks
-   - Force mode (`--force`) to ignore template `should_run()` logic
+   - Force mode (`--force`) to ignore pipeline predicates
    - Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits --output-format json`
    - Timeout: 5 minutes per repo
 
@@ -310,8 +244,8 @@ RepoExists() | FileExists("README.md")  # OR
 - Repository deduplication by ID to handle overlaps between user/org repos
 - Default branch detection before pulling (uses `git rev-parse --abbrev-ref HEAD`)
 - Rate limit detection with graceful exit on HTTP 403
-- Thread-safe parallel processing for all operations marked as safe_parallel (no token required)
-- Dry-run mode available for all operations
+- Thread-safe parallel processing for all pipelines marked as safe_parallel
+- Dry-run mode available for all pipelines
 - Comprehensive filtering: by repo name, org, pattern, visibility, fork/archived status
 - Forked repositories are excluded by default (use `--include-forks` to include them)
 - Archived repositories are excluded by default (use `--include-archived` to include them)

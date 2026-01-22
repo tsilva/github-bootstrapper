@@ -11,8 +11,6 @@ from typing import List, Optional
 from .config import Config
 from .core.logger import setup_logging
 from .core.github_client import GitHubClient
-from .core.repo_manager import RepoManager
-from .operations.registry import registry
 from .utils.filters import RepoFilter
 from .utils.progress import print_summary
 from .pipelines import pipeline_registry, PipelineExecutor
@@ -102,11 +100,12 @@ Examples:
   # Pull updates for existing repositories
   gitfleet pull-only --workers 8
 
-  # Execute Claude prompts using templates (forks/archived excluded by default)
-  gitfleet claude-exec init
+  # Check repository status
+  gitfleet status
 
-  # Execute raw Claude prompts
-  gitfleet claude-exec "/readme-generator"
+  # Execute Claude prompts (raw prompts or skills)
+  gitfleet claude-exec "/readme-generator" --repo my-repo
+  gitfleet claude-exec "Add a LICENSE file" --dry-run
 
   # Enable sandbox mode for all repos
   gitfleet sandbox-enable
@@ -114,16 +113,11 @@ Examples:
   # Clean Claude settings
   gitfleet settings-clean --mode analyze
 
-  # Use claude pipeline to run prompts or skills
-  gitfleet pipeline claude "/readme-generator" --repo my-repo
-  gitfleet pipeline claude "/claude-settings-optimizer --mode analyze"
-  gitfleet pipeline claude "Add a LICENSE file"
-
   # Filter by organization
   gitfleet sync --org mycompany --private-only
 
   # Filter by pattern
-  gitfleet readme-gen --pattern "my-*"
+  gitfleet sync --pattern "my-*"
 
   # Pipe repo names from other commands
   ls sandbox-* | gitfleet claude-exec "Add a LICENSE file"
@@ -133,93 +127,69 @@ Examples:
 
     # Global flags
     parser.add_argument(
-        '--list-templates',
-        action='store_true',
-        help='List available prompt templates and exit'
-    )
-    parser.add_argument(
         '--list-pipelines',
         action='store_true',
         help='List available pipelines and exit'
     )
 
-    # Subcommands (operations)
+    # Subcommands (pipelines)
     subparsers = parser.add_subparsers(
         dest='operation',
         help='Operation to perform',
         required=False
     )
 
-    # Dynamically add subcommands from registry
-    for op_name, op_class in registry.get_all_operations().items():
+    # Dynamically add subcommands from pipeline registry
+    for pipeline_name in pipeline_registry.list_pipelines():
+        pipeline_class = pipeline_registry.get(pipeline_name)
+        desc = getattr(pipeline_class, 'description', 'No description')
+
         op_parser = subparsers.add_parser(
-            op_name,
-            help=op_class.description
+            pipeline_name,
+            help=desc
         )
         _add_common_args(op_parser)
 
-        # Add operation-specific arguments
-        if op_name == 'claude-exec':
+        # Add pipeline-specific arguments
+        if pipeline_name == 'claude-exec':
             op_parser.add_argument(
                 'prompt',
-                help='Template name or raw prompt string'
+                help='Prompt string or skill name (e.g., "/readme-generator")'
             )
             op_parser.add_argument(
                 '--force',
                 action='store_true',
-                help='Execute on all repos, ignoring template should_run() logic'
+                help='Execute on all repos, ignoring pipeline predicates'
             )
             op_parser.add_argument(
                 '--yes', '-y',
                 action='store_true',
                 help='Skip confirmation prompt'
             )
-        elif op_name == 'readme-gen':
-            op_parser.add_argument(
-                '--force',
-                action='store_true',
-                help='Regenerate README even if it already exists'
-            )
-        elif op_name == 'claude-init':
-            op_parser.add_argument(
-                '--force',
-                action='store_true',
-                help='Regenerate CLAUDE.md even if it already exists'
-            )
-        elif op_name == 'settings-clean':
+        elif pipeline_name == 'settings-clean':
             op_parser.add_argument(
                 '--mode',
                 choices=['analyze', 'clean', 'auto-fix'],
                 default='analyze',
                 help='Operation mode (default: analyze)'
             )
-
-    # Add pipeline subcommand
-    pipeline_parser = subparsers.add_parser(
-        'pipeline',
-        help='Execute a pipeline (new composable architecture)'
-    )
-    _add_common_args(pipeline_parser)
-    pipeline_parser.add_argument(
-        'pipeline_name',
-        help='Name of the pipeline to execute'
-    )
-    pipeline_parser.add_argument(
-        'prompt',
-        nargs='?',
-        help='Prompt for claude pipeline (e.g., "/readme-generator" or "Add tests")'
-    )
-    pipeline_parser.add_argument(
-        '--force',
-        action='store_true',
-        help='Force execution, ignoring pipeline predicates'
-    )
-    pipeline_parser.add_argument(
-        '--mode',
-        choices=['analyze', 'clean', 'auto-fix'],
-        default='analyze',
-        help='Operation mode for settings-clean (default: analyze)'
-    )
+        elif pipeline_name in ('sync', 'clone-only', 'pull-only', 'sandbox-enable', 'description-sync', 'status', 'commit-push'):
+            op_parser.add_argument(
+                '--force',
+                action='store_true',
+                help='Force execution, ignoring pipeline predicates'
+            )
+            op_parser.add_argument(
+                '--yes', '-y',
+                action='store_true',
+                help='Skip confirmation prompt'
+            )
+            # Commit-push specific arguments
+            if pipeline_name == 'commit-push':
+                op_parser.add_argument(
+                    '--message', '-m',
+                    help='Commit message'
+                )
 
     return parser
 
@@ -303,8 +273,6 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-
-
 def _execute_pipeline(args, config, github_client, repos, logger):
     """Execute a pipeline.
 
@@ -318,7 +286,7 @@ def _execute_pipeline(args, config, github_client, repos, logger):
     Returns:
         Exit code
     """
-    pipeline_name = args.pipeline_name
+    pipeline_name = args.operation
 
     # Get pipeline class
     pipeline_class = pipeline_registry.get(pipeline_name)
@@ -331,10 +299,10 @@ def _execute_pipeline(args, config, github_client, repos, logger):
     pipeline_kwargs = {}
 
     # Claude pipeline requires a prompt
-    if pipeline_name == 'claude':
+    if pipeline_name == 'claude-exec':
         prompt = getattr(args, 'prompt', None)
         if not prompt:
-            logger.error("The 'claude' pipeline requires a prompt argument")
+            logger.error("The claude-exec pipeline requires a prompt argument")
             return 1
         pipeline_kwargs['prompt'] = prompt
 
@@ -343,8 +311,19 @@ def _execute_pipeline(args, config, github_client, repos, logger):
         mode = getattr(args, 'mode', 'analyze')
         pipeline_kwargs['mode'] = mode
 
+    # Commit-push pipeline supports --message
+    if pipeline_name == 'commit-push':
+        message = getattr(args, 'message', None)
+        if message:
+            pipeline_kwargs['message'] = message
+
     # Create pipeline instance
     pipeline = pipeline_class(**pipeline_kwargs)
+
+    # Use pipeline's default workers if user didn't specify
+    if args.workers is None and pipeline.default_workers is not None:
+        config.max_workers = pipeline.default_workers
+        logger.info(f"  Using pipeline default workers: {config.max_workers}")
 
     # Check if pipeline requires token
     if pipeline.requires_token and not config.is_authenticated:
@@ -372,7 +351,7 @@ def _execute_pipeline(args, config, github_client, repos, logger):
     )
 
     # Print summary
-    print_summary(results, operation_name=f"pipeline:{pipeline_name}")
+    print_summary(results, operation_name=pipeline_name)
 
     # Return exit code based on failures
     failed_count = sum(1 for r in results if r.failed)
@@ -384,14 +363,6 @@ def main():
     # Parse arguments
     parser = create_parser()
     args = parser.parse_args()
-
-    # Handle --list-templates flag
-    if args.list_templates:
-        from .prompt_templates import template_registry
-        print("Available prompt templates:")
-        for name, template_class in template_registry.get_all_templates().items():
-            print(f"  {name}: {template_class.description}")
-        return 0
 
     # Handle --list-pipelines flag
     if args.list_pipelines:
@@ -477,65 +448,8 @@ def main():
             logger.warning("No repositories match the filter criteria")
             return 0
 
-        # Handle pipeline command separately
-        if args.operation == 'pipeline':
-            return _execute_pipeline(
-                args, config, github_client, repos, logger
-            )
-
-        # Get operation class
-        operation_class = registry.get(args.operation)
-
-        # Use operation's default workers if user didn't specify
-        if args.workers is None and operation_class.default_workers is not None:
-            config.max_workers = operation_class.default_workers
-            logger.info(f"  Using operation default workers: {config.max_workers}")
-
-        # Check if operation requires token
-        if operation_class.requires_token and not config.is_authenticated:
-            logger.error(
-                f"Operation '{args.operation}' requires a GitHub token. "
-                "Set GITHUB_TOKEN in .env or use --token"
-            )
-            return 1
-
-        # Create repository manager
-        repo_manager = RepoManager(
-            github_client=github_client,
-            base_dir=config.repos_base_dir,
-            max_workers=config.max_workers,
-            sequential=config.sequential
-        )
-
-        # Build operation-specific kwargs
-        operation_kwargs = {'clone_url_getter': github_client.get_clone_url}
-
-        # Add operation-specific arguments
-        if args.operation == 'claude-exec':
-            operation_kwargs['prompt'] = args.prompt
-            operation_kwargs['force'] = getattr(args, 'force', False)
-            operation_kwargs['yes'] = getattr(args, 'yes', False)
-        elif args.operation == 'readme-gen':
-            operation_kwargs['force'] = getattr(args, 'force', False)
-        elif args.operation == 'claude-init':
-            operation_kwargs['force'] = getattr(args, 'force', False)
-        elif args.operation == 'settings-clean':
-            operation_kwargs['mode'] = getattr(args, 'mode', 'analyze')
-
-        # Execute operation
-        results = repo_manager.execute_operation(
-            operation_class=operation_class,
-            repos=repos,
-            dry_run=args.dry_run,
-            **operation_kwargs
-        )
-
-        # Print summary
-        print_summary(results, operation_name=args.operation)
-
-        # Return exit code based on failures
-        failed_count = sum(1 for r in results if r.failed)
-        return 1 if failed_count > 0 else 0
+        # Execute pipeline
+        return _execute_pipeline(args, config, github_client, repos, logger)
 
     except ValueError as e:
         logger.error(f"Configuration error: {e}")

@@ -6,8 +6,6 @@ from .executor import PipelineExecutor, action_result_to_operation_result
 
 from .registry import PipelineRegistry, pipeline_registry
 
-from .adapter import PipelineAsOperation, pipeline_to_operation_class
-
 from .git_ops import (
     SyncPipeline,
     CloneOnlyPipeline,
@@ -33,6 +31,11 @@ from .subprocess_ops import (
     create_claude_pipeline,
 )
 
+from .status_ops import (
+    StatusPipeline,
+    StatusCheckAction,
+)
+
 __all__ = [
     # Base
     'Pipeline',
@@ -45,9 +48,6 @@ __all__ = [
     # Registry
     'PipelineRegistry',
     'pipeline_registry',
-    # Adapter
-    'PipelineAsOperation',
-    'pipeline_to_operation_class',
     # Git pipelines
     'SyncPipeline',
     'CloneOnlyPipeline',
@@ -67,4 +67,7 @@ __all__ = [
     'ClaudePipeline',
     'create_description_sync_pipeline',
     'create_claude_pipeline',
+    # Status pipeline
+    'StatusPipeline',
+    'StatusCheckAction',
 ]

@@ -40,7 +40,7 @@ class ClaudePipeline(Pipeline):
     like "/readme-generator" or "/claude-settings-optimizer --mode analyze".
     """
 
-    name = "claude"
+    name = "claude-exec"
     description = "Execute Claude CLI prompt (supports skills via /skill-name)"
     requires_token = False
     safe_parallel = False  # Sequential for API rate limits

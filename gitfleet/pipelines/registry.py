@@ -25,12 +25,16 @@ class PipelineRegistry:
         from .git_ops import SyncPipeline, CloneOnlyPipeline, PullOnlyPipeline, CommitPushPipeline
         from .settings_ops import SandboxEnablePipeline, SettingsCleanPipeline
         from .subprocess_ops import DescriptionSyncPipeline, ClaudePipeline
+        from .status_ops import StatusPipeline
 
         # Git operations
         self.register(SyncPipeline)
         self.register(CloneOnlyPipeline)
         self.register(PullOnlyPipeline)
         self.register(CommitPushPipeline)
+
+        # Status operation
+        self.register(StatusPipeline)
 
         # Settings operations
         self.register(SandboxEnablePipeline)

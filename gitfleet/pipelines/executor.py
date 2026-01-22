@@ -7,8 +7,7 @@ from typing import List, Dict, Any, Optional, Callable, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .base import Pipeline
-from ..core.types import RepoContext, ActionResult, Status
-from ..operations.base import OperationResult, OperationStatus
+from ..core.types import RepoContext, ActionResult, Status, OperationResult, OperationStatus
 from ..utils.progress import ProgressTracker
 
 logger = logging.getLogger('gitfleet')
@@ -169,6 +168,9 @@ class PipelineExecutor:
         # Finish progress tracker
         if progress_tracker:
             progress_tracker.finish()
+
+        # Call post-batch hook for aggregation/summary
+        pipeline.post_batch_hook(results)
 
         return results
 

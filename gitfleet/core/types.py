@@ -12,6 +12,34 @@ class Status(Enum):
     FAILED = "failed"
 
 
+# Aliases for backward compatibility
+OperationStatus = Status
+
+
+@dataclass
+class OperationResult:
+    """Result of an operation execution (backward compatible with legacy operations)."""
+    status: Status
+    message: str
+    repo_name: str
+    repo_full_name: str
+
+    @property
+    def success(self) -> bool:
+        """Check if operation was successful."""
+        return self.status == Status.SUCCESS
+
+    @property
+    def skipped(self) -> bool:
+        """Check if operation was skipped."""
+        return self.status == Status.SKIPPED
+
+    @property
+    def failed(self) -> bool:
+        """Check if operation failed."""
+        return self.status == Status.FAILED
+
+
 @dataclass
 class ActionResult:
     """Result of a single action execution with rich metadata."""
