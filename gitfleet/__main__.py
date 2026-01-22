@@ -18,6 +18,46 @@ from .utils.progress import print_summary
 from .pipelines import pipeline_registry, PipelineExecutor
 
 
+def _read_stdin_repos() -> List[str]:
+    """Read repository names from stdin if piped.
+
+    Returns:
+        List of repo names from stdin, or empty list if stdin is a tty
+    """
+    if sys.stdin.isatty():
+        return []
+
+    repos = []
+    for line in sys.stdin:
+        line = line.strip()
+        if line:  # Skip empty lines
+            repos.append(line)
+    return repos
+
+
+def _scan_local_git_repos(base_dir: str) -> List[str]:
+    """Scan a directory for subdirectories that are git repositories.
+
+    Args:
+        base_dir: Directory to scan
+
+    Returns:
+        List of directory names that are git repositories
+    """
+    import os
+
+    repos = []
+    try:
+        for entry in os.scandir(base_dir):
+            if entry.is_dir() and not entry.name.startswith('.'):
+                git_dir = os.path.join(entry.path, '.git')
+                if os.path.isdir(git_dir):
+                    repos.append(entry.name)
+    except OSError:
+        pass
+    return sorted(repos)
+
+
 def is_inside_git_repo(path: str) -> bool:
     """Check if a path is inside a git repository.
 
@@ -84,6 +124,10 @@ Examples:
 
   # Filter by pattern
   gitfleet readme-gen --pattern "my-*"
+
+  # Pipe repo names from other commands
+  ls sandbox-* | gitfleet claude-exec "Add a LICENSE file"
+  echo -e "repo1\\nrepo2" | gitfleet sync
         """
     )
 
@@ -399,9 +443,23 @@ def main():
         logger.info("Fetching repositories from GitHub...")
         repos = github_client.get_repos()
 
+        # Read repos from stdin if piped
+        stdin_repos = _read_stdin_repos()
+
+        # Merge stdin repos with CLI --repo args
+        all_repos = (args.repos or []) + stdin_repos
+
+        # If no repos specified, scan local git repos
+        if not all_repos:
+            all_repos = _scan_local_git_repos(config.repos_base_dir)
+            if all_repos:
+                logger.info(f"Found {len(all_repos)} local git repositories")
+
+        repo_names = all_repos if all_repos else None
+
         # Apply filters
         repo_filter = RepoFilter(
-            repo_names=args.repos,
+            repo_names=repo_names,
             org_names=args.orgs,
             patterns=[args.pattern] if args.pattern else None,
             include_forks=args.include_forks,
