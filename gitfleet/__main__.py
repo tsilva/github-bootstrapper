@@ -367,7 +367,8 @@ def _execute_pipeline(args, config, github_client, repos, logger):
         pipeline=pipeline,
         repos=repos,
         dry_run=args.dry_run,
-        force=getattr(args, 'force', False)
+        force=getattr(args, 'force', False),
+        yes=getattr(args, 'yes', False)
     )
 
     # Print summary

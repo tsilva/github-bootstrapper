@@ -81,6 +81,7 @@ class PipelineExecutor:
         repos: List[Dict[str, Any]],
         dry_run: bool = False,
         force: bool = False,
+        yes: bool = False,
         **kwargs
     ) -> List[OperationResult]:
         """Execute a pipeline on a list of repositories.
@@ -90,16 +91,12 @@ class PipelineExecutor:
             repos: List of repository dictionaries
             dry_run: If True, preview without executing
             force: If True, ignore pipeline predicates
+            yes: If True, skip confirmation prompt
             **kwargs: Additional kwargs for context variables
 
         Returns:
             List of OperationResults for backward compatibility
         """
-        logger.info(f"Executing pipeline: {pipeline.name}")
-        logger.info(f"Description: {pipeline.description}")
-        logger.info(f"Total repositories: {len(repos)}")
-        logger.info(f"Dry run: {dry_run}")
-
         # Pre-filter repositories using pipeline predicates
         repos_to_execute = []
         repos_skipped: List[Tuple[Dict[str, Any], str]] = []
@@ -116,16 +113,36 @@ class PipelineExecutor:
 
             repos_to_execute.append(repo)
 
-        # Log filtering results
-        logger.info(f"Repositories to process: {len(repos_to_execute)}")
-        if repos_skipped:
-            logger.info(f"Repositories to skip: {len(repos_skipped)}")
+        # Show execution preview
+        print(f"\n{'='*60}")
+        print(f"Pipeline: {pipeline.name}")
+        print(f"Description: {pipeline.description}")
+        print(f"{'='*60}")
+        print(f"\nRepositories to process ({len(repos_to_execute)}):")
+        for repo in repos_to_execute:
+            print(f"  • {repo['full_name']}")
 
-        # In dry-run mode, log all skip reasons
-        if dry_run and repos_skipped:
-            logger.info("\nSkipped repositories:")
+        if repos_skipped:
+            print(f"\nRepositories to skip ({len(repos_skipped)}):")
             for repo, reason in repos_skipped:
-                logger.info(f"  ⊘ {repo['full_name']}: {reason}")
+                print(f"  ⊘ {repo['full_name']}: {reason}")
+
+        print(f"\nDry run: {dry_run}")
+        print(f"{'='*60}\n")
+
+        # No repos to process
+        if not repos_to_execute:
+            print("No repositories to process.")
+            return []
+
+        # Prompt for confirmation (unless --yes flag)
+        if not yes and not dry_run:
+            if not self._confirm_execution():
+                print("Operation cancelled.")
+                return []
+
+        logger.info(f"Executing pipeline: {pipeline.name}")
+        logger.info(f"Repositories to process: {len(repos_to_execute)}")
 
         # Create progress tracker if needed
         progress_tracker = None
@@ -297,3 +314,23 @@ class PipelineExecutor:
             logger.info(f"⊘ {result.repo_name}: {result.message}")
         else:
             logger.error(f"✗ {result.repo_name}: {result.message}")
+
+    def _confirm_execution(self) -> bool:
+        """Prompt user for confirmation before execution.
+
+        Returns:
+            True if user confirms, False otherwise
+        """
+        try:
+            tty = open('/dev/tty', 'r')
+        except OSError:
+            # No TTY available, proceed without confirmation
+            logger.warning("No TTY available, proceeding without confirmation")
+            return True
+
+        try:
+            print("Proceed? [y/N]: ", end="", flush=True)
+            response = tty.readline().strip().lower()
+            return response in ('y', 'yes')
+        finally:
+            tty.close()

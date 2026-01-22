@@ -470,12 +470,12 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
 
 
 class ClaudeCommitMessageAction(Action):
-    """Generate commit message using Claude and prompt for review.
+    """Generate commit message using Claude.
 
     This action:
     1. Gets the staged diff stats (git diff --cached --stat)
     2. Asks Claude to generate a commit message
-    3. Prompts user for review/edit (unless skip_confirmation is set)
+    3. Auto-accepts by default (set interactive_confirm=True for review prompt)
     4. Stores the final message in ctx.variables['commit_message']
     """
 
@@ -571,34 +571,52 @@ Rules:
                 action_name=self.name
             )
 
-        # 4. Interactive review (skip if --yes flag)
-        if not ctx.get_variable('skip_confirmation', False):
-            print(f"\n[{ctx.repo_name}] Proposed commit message:")
-            print(f"---\n{generated_message}\n---")
-            print("(a)ccept, (e)dit, (s)kip repo: ", end="", flush=True)
-            response = input().strip().lower()
-
-            if response in ('s', 'skip'):
+        # 4. Interactive review (only if --confirm flag is set)
+        if ctx.get_variable('interactive_confirm', False):
+            # Read from /dev/tty to allow interactive input even when stdin is piped
+            try:
+                tty = open('/dev/tty', 'r')
+            except OSError:
+                # If no TTY available, skip confirmation
+                logger.warning("No TTY available, skipping confirmation")
+                ctx.set_variable('commit_message', generated_message)
                 return ActionResult(
-                    status=Status.SKIPPED,
-                    message="User skipped",
-                    action_name=self.name
+                    status=Status.SUCCESS,
+                    message="Commit message generated (no TTY, auto-accepted)",
+                    action_name=self.name,
+                    metadata={'message': generated_message, 'diff_stats': diff_stats}
                 )
-            elif response in ('e', 'edit'):
-                print("Enter commit message (press Enter twice to finish):")
-                lines = []
-                empty_count = 0
-                while empty_count < 1:
-                    line = input()
-                    if line == "":
-                        empty_count += 1
-                    else:
-                        empty_count = 0
-                        lines.append(line)
-                new_message = "\n".join(lines).strip()
-                if new_message:
-                    generated_message = new_message
-                print(f"Using message: {generated_message[:50]}...")
+
+            try:
+                print(f"\n[{ctx.repo_name}] Proposed commit message:")
+                print(f"---\n{generated_message}\n---")
+                print("(a)ccept, (e)dit, (s)kip repo: ", end="", flush=True)
+                response = tty.readline().strip().lower()
+
+                if response in ('s', 'skip'):
+                    tty.close()
+                    return ActionResult(
+                        status=Status.SKIPPED,
+                        message="User skipped",
+                        action_name=self.name
+                    )
+                elif response in ('e', 'edit'):
+                    print("Enter commit message (press Enter twice to finish):")
+                    lines = []
+                    empty_count = 0
+                    while empty_count < 1:
+                        line = tty.readline().rstrip('\n')
+                        if line == "":
+                            empty_count += 1
+                        else:
+                            empty_count = 0
+                            lines.append(line)
+                    new_message = "\n".join(lines).strip()
+                    if new_message:
+                        generated_message = new_message
+                    print(f"Using message: {generated_message[:50]}...")
+            finally:
+                tty.close()
 
         # 5. Store in context
         ctx.set_variable('commit_message', generated_message)
