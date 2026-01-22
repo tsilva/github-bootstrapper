@@ -31,6 +31,17 @@ from .subprocess_ops import (
     create_claude_exec_pipeline,
 )
 
+from .skill_ops import (
+    ReadmeGeneratorPipeline,
+    LogoGeneratorPipeline,
+    SettingsOptimizerPipeline,
+    RepoNameGeneratorPipeline,
+    create_readme_generator_pipeline,
+    create_logo_generator_pipeline,
+    create_settings_optimizer_pipeline,
+    create_name_generator_pipeline,
+)
+
 __all__ = [
     # Base
     'Pipeline',
@@ -63,4 +74,13 @@ __all__ = [
     'ClaudeExecPipeline',
     'create_description_sync_pipeline',
     'create_claude_exec_pipeline',
+    # Skill pipelines
+    'ReadmeGeneratorPipeline',
+    'LogoGeneratorPipeline',
+    'SettingsOptimizerPipeline',
+    'RepoNameGeneratorPipeline',
+    'create_readme_generator_pipeline',
+    'create_logo_generator_pipeline',
+    'create_settings_optimizer_pipeline',
+    'create_name_generator_pipeline',
 ]

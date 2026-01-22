@@ -3,7 +3,7 @@
 from .base import Pipeline
 from ..predicates import RepoExists
 from ..actions.json_ops import JsonPatchAction
-from ..actions.subprocess_ops import SubprocessAction
+from ..actions.subprocess_ops import ConditionalSkillAction
 
 
 class SandboxEnablePipeline(Pipeline):
@@ -38,15 +38,16 @@ class SandboxEnablePipeline(Pipeline):
 
 
 class SettingsCleanPipeline(Pipeline):
-    """Clean Claude Code settings via settings-cleaner script.
+    """Clean Claude Code settings via claude-settings-optimizer skill.
 
-    This replaces SettingsCleanOperation with a pipeline-based implementation.
+    This replaces SettingsCleanOperation with a pipeline-based implementation
+    that invokes the skill through Claude CLI.
     """
 
     name = "settings-clean"
     description = "Analyze and clean Claude Code settings"
     requires_token = False
-    safe_parallel = True
+    safe_parallel = False  # Sequential for Claude API rate limits
 
     def __init__(self, mode: str = "analyze"):
         """Initialize settings-clean pipeline.
@@ -60,15 +61,11 @@ class SettingsCleanPipeline(Pipeline):
         # Only run if repo exists
         self.when(RepoExists())
 
-        # Run the settings cleaner script
-        # Note: This assumes uv and the script are available
-        self.then(SubprocessAction(
-            command=[
-                "uv", "run",
-                "python", "-m", "settings_cleaner",
-                f"--mode={mode}"
-            ],
-            timeout=60
+        # Invoke the claude-settings-optimizer skill via Claude CLI
+        self.then(ConditionalSkillAction(
+            skill="claude-settings-optimizer",
+            skill_args=f"--mode {mode}",
+            timeout=120
         ))
 
 

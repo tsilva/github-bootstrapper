@@ -74,6 +74,14 @@ Examples:
   # Clean Claude settings
   gitfleet settings-clean --mode analyze
 
+  # Use skill pipelines (new)
+  gitfleet pipeline settings-optimizer --mode analyze
+  gitfleet pipeline readme-generator
+  gitfleet pipeline logo-generator
+
+  # Skill pipelines with conditions (Claude evaluates)
+  gitfleet pipeline readme-generator --condition "README tagline does NOT contain an emoji"
+
   # Filter by organization
   gitfleet sync --org mycompany --private-only
 
@@ -159,6 +167,17 @@ Examples:
         '--force',
         action='store_true',
         help='Force execution, ignoring pipeline predicates'
+    )
+    pipeline_parser.add_argument(
+        '--condition',
+        metavar='CONDITION',
+        help='Natural language condition for Claude to evaluate (for skill pipelines)'
+    )
+    pipeline_parser.add_argument(
+        '--mode',
+        choices=['analyze', 'clean', 'auto-fix'],
+        default='analyze',
+        help='Operation mode for settings-optimizer/settings-clean (default: analyze)'
     )
 
     return parser
@@ -267,8 +286,24 @@ def _execute_pipeline(args, config, github_client, repos, logger):
         logger.error(f"Unknown pipeline: {pipeline_name}. Available: {available}")
         return 1
 
+    # Build pipeline kwargs based on pipeline type
+    pipeline_kwargs = {}
+
+    # Skill pipelines that support --condition
+    condition_pipelines = ['readme-generator', 'logo-generator', 'name-generator']
+    if pipeline_name in condition_pipelines:
+        condition = getattr(args, 'condition', None)
+        if condition:
+            pipeline_kwargs['condition'] = condition
+
+    # Pipelines that support --mode
+    mode_pipelines = ['settings-optimizer', 'settings-clean']
+    if pipeline_name in mode_pipelines:
+        mode = getattr(args, 'mode', 'analyze')
+        pipeline_kwargs['mode'] = mode
+
     # Create pipeline instance
-    pipeline = pipeline_class()
+    pipeline = pipeline_class(**pipeline_kwargs)
 
     # Check if pipeline requires token
     if pipeline.requires_token and not config.is_authenticated:

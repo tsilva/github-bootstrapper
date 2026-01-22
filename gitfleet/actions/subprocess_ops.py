@@ -311,3 +311,159 @@ class GhCliAction(Action):
 
     def dry_run_message(self, ctx: 'RepoContext') -> str:
         return f"Would run: gh {' '.join(self.args)}"
+
+
+class ConditionalSkillAction(Action):
+    """Invoke a Claude skill conditionally, where Claude evaluates the condition.
+
+    This action invokes a skill via the Claude CLI. Optionally, a natural language
+    condition can be provided that Claude will evaluate to determine whether to
+    run the skill or skip it.
+    """
+
+    name = "conditional-skill"
+    modifies_repo = True
+    description = "Conditionally invoke Claude skill"
+
+    def __init__(
+        self,
+        skill: str,
+        condition: Optional[str] = None,
+        skill_args: str = "",
+        skip_message: str = "Condition not met - skipped",
+        timeout: int = 300
+    ):
+        """Initialize conditional skill action.
+
+        Args:
+            skill: Skill name (e.g., "readme-generator", "claude-settings-optimizer")
+            condition: Natural language condition for Claude to evaluate.
+                       If None, skill runs unconditionally.
+            skill_args: Arguments to pass to the skill (e.g., "--mode analyze")
+            skip_message: Message Claude should return if condition fails
+            timeout: Timeout in seconds (default 5 minutes)
+        """
+        self.skill = skill
+        self.condition = condition
+        self.skill_args = skill_args
+        self.skip_message = skip_message
+        self.timeout = timeout
+
+    def _build_prompt(self) -> str:
+        """Build the prompt to send to Claude CLI."""
+        skill_invocation = f"/{self.skill}"
+        if self.skill_args:
+            skill_invocation += f" {self.skill_args}"
+
+        if self.condition:
+            return f"""First, evaluate this condition: {self.condition}
+
+If the condition is TRUE: Run {skill_invocation}
+If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
+        else:
+            return skill_invocation
+
+    def execute(self, ctx: 'RepoContext') -> ActionResult:
+        """Execute the skill via Claude CLI."""
+        prompt = self._build_prompt()
+
+        # Handle dry run
+        if ctx.dry_run:
+            return ActionResult(
+                status=Status.SUCCESS,
+                message=self.dry_run_message(ctx),
+                action_name=self.name,
+                metadata={
+                    'dry_run': True,
+                    'skill': self.skill,
+                    'skill_args': self.skill_args,
+                    'condition': self.condition,
+                    'prompt_preview': prompt[:100]
+                }
+            )
+
+        # Build command
+        command = [
+            "claude",
+            "-p", prompt,
+            "--permission-mode", "acceptEdits",
+            "--output-format", "json"
+        ]
+
+        try:
+            logger.info(f"Running skill /{self.skill} for {ctx.repo_name}...")
+            result = subprocess.run(
+                command,
+                cwd=ctx.repo_path,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout
+            )
+
+            # Check if the response indicates a skip
+            if self.condition and self.skip_message in result.stdout:
+                return ActionResult(
+                    status=Status.SKIPPED,
+                    message=f"Skipped: {self.skip_message}",
+                    action_name=self.name,
+                    metadata={
+                        'skill': self.skill,
+                        'condition': self.condition,
+                        'stdout': result.stdout,
+                        'stderr': result.stderr
+                    }
+                )
+
+            if result.returncode == 0:
+                return ActionResult(
+                    status=Status.SUCCESS,
+                    message=f"Skill /{self.skill} completed",
+                    action_name=self.name,
+                    metadata={
+                        'skill': self.skill,
+                        'stdout': result.stdout,
+                        'stderr': result.stderr,
+                        'returncode': result.returncode
+                    }
+                )
+            else:
+                return ActionResult(
+                    status=Status.FAILED,
+                    message=f"Skill /{self.skill} failed with exit code {result.returncode}",
+                    action_name=self.name,
+                    metadata={
+                        'skill': self.skill,
+                        'stdout': result.stdout,
+                        'stderr': result.stderr,
+                        'returncode': result.returncode
+                    }
+                )
+
+        except subprocess.TimeoutExpired:
+            return ActionResult(
+                status=Status.FAILED,
+                message=f"Skill /{self.skill} timed out after {self.timeout}s",
+                action_name=self.name,
+                metadata={'skill': self.skill, 'timeout': self.timeout}
+            )
+        except FileNotFoundError:
+            return ActionResult(
+                status=Status.FAILED,
+                message="Claude CLI not found - ensure 'claude' is installed",
+                action_name=self.name
+            )
+        except Exception as e:
+            return ActionResult(
+                status=Status.FAILED,
+                message=f"Skill error: {e}",
+                action_name=self.name,
+                metadata={'skill': self.skill, 'error': str(e)}
+            )
+
+    def dry_run_message(self, ctx: 'RepoContext') -> str:
+        skill_invocation = f"/{self.skill}"
+        if self.skill_args:
+            skill_invocation += f" {self.skill_args}"
+        if self.condition:
+            return f"Would run Claude CLI with skill: {skill_invocation} (condition: {self.condition[:50]}...)"
+        return f"Would run Claude CLI with skill: {skill_invocation}"
