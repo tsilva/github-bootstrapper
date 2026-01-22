@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GitHub Bootstrapper is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports eight operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), claude-exec (execute Claude prompts using templates or raw prompts), settings-clean (Claude Code settings cleanup), sandbox-enable (enable Claude Code sandbox mode), and description-sync (sync GitHub repo description with README tagline). Features include parallel processing, flexible filtering, and an extensible operation framework.
+gitfleet is a multi-operation repository management system that performs bulk operations on GitHub repositories. It supports eight operations: sync (clone + pull), clone-only, pull-only, status (synchronization status reporting), claude-exec (execute Claude prompts using templates or raw prompts), settings-clean (Claude Code settings cleanup), sandbox-enable (enable Claude Code sandbox mode), and description-sync (sync GitHub repo description with README tagline). Features include parallel processing, flexible filtering, and an extensible operation framework.
 
 ## Prompt Templates
 
