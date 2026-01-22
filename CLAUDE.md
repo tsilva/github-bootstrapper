@@ -100,8 +100,27 @@ gitfleet/
 │   ├── core/
 │   │   ├── github_client.py        # GitHub API client
 │   │   ├── repo_manager.py         # Operation orchestrator
-│   │   └── logger.py               # Logging utilities
-│   ├── operations/
+│   │   ├── logger.py               # Logging utilities
+│   │   ├── types.py                # Core types (RepoContext, ActionResult, Status)
+│   │   └── registry.py             # Unified generic registry
+│   ├── predicates/                 # Composable predicates (NEW)
+│   │   ├── base.py                 # Predicate base class and combinators
+│   │   └── core.py                 # Core predicates (RepoExists, RepoClean, etc.)
+│   ├── actions/                    # Single-responsibility actions (NEW)
+│   │   ├── base.py                 # Action base class
+│   │   ├── git.py                  # Git actions (CloneAction, PullAction)
+│   │   ├── json_ops.py             # JSON manipulation actions
+│   │   ├── subprocess_ops.py       # Subprocess actions (ClaudeCliAction, etc.)
+│   │   └── description_sync.py     # Description sync action
+│   ├── pipelines/                  # Composable pipelines (NEW)
+│   │   ├── base.py                 # Pipeline class with fluent API
+│   │   ├── executor.py             # PipelineExecutor
+│   │   ├── registry.py             # Pipeline registry
+│   │   ├── adapter.py              # Pipeline-to-Operation adapter
+│   │   ├── git_ops.py              # Git pipelines (sync, clone-only, pull-only)
+│   │   ├── settings_ops.py         # Settings pipelines (sandbox-enable, settings-clean)
+│   │   └── subprocess_ops.py       # Subprocess pipelines (description-sync, claude-exec)
+│   ├── operations/                 # Legacy operations (still supported)
 │   │   ├── base.py                 # Abstract Operation class
 │   │   ├── registry.py             # Auto-discovery via introspection
 │   │   ├── sync.py                 # Clone + pull operation
@@ -125,7 +144,69 @@ gitfleet/
 └── uv.lock                         # Dependency lock file
 ```
 
-### Operation Framework
+### Pipeline Architecture (New)
+
+gitfleet uses a composable pipeline architecture that separates concerns into:
+- **Predicates** - When to run (composable conditions)
+- **Actions** - What to do (single-responsibility execution units)
+- **Pipelines** - How to compose predicates and actions
+
+**Key Packages:**
+- `gitfleet/predicates/` - Composable predicates (RepoExists, RepoClean, NotArchived, etc.)
+- `gitfleet/actions/` - Single-responsibility actions (CloneAction, PullAction, JsonPatchAction, etc.)
+- `gitfleet/pipelines/` - Pipeline definitions and executor
+- `gitfleet/core/types.py` - Core types (RepoContext, ActionResult, Status)
+- `gitfleet/core/registry.py` - Unified generic registry
+
+**Using Pipelines:**
+```bash
+# List available pipelines
+gitfleet --list-pipelines
+
+# Execute a pipeline
+gitfleet pipeline sync --username your-username
+gitfleet pipeline clone-only --dry-run --username your-username
+gitfleet pipeline sandbox-enable --force --username your-username
+```
+
+**Creating New Pipelines:**
+```python
+from gitfleet.pipelines import Pipeline
+from gitfleet.predicates import RepoExists, RepoClean, not_
+from gitfleet.actions import CloneAction, PullAction
+
+class MyPipeline(Pipeline):
+    name = "my-pipeline"
+    description = "My custom pipeline"
+    safe_parallel = True
+
+    def __init__(self):
+        super().__init__()
+        # Define conditions and actions
+        self.when(RepoExists())
+        self.then(PullAction())
+```
+
+**Predicate Combinators:**
+```python
+from gitfleet.predicates import all_of, any_of, not_, RepoExists, RepoClean
+
+# All conditions must pass
+all_of(RepoExists(), RepoClean())
+
+# Any condition passes
+any_of(RepoExists(), FileExists("README.md"))
+
+# Negate a predicate
+not_(RepoExists())
+
+# Use operators
+RepoExists() & RepoClean()  # AND
+RepoExists() | FileExists("README.md")  # OR
+~RepoExists()  # NOT
+```
+
+### Operation Framework (Legacy)
 
 **Strategy Pattern with Auto-Discovery:**
 - `Operation` base class defines interface: `execute()`, `should_skip()`, hooks

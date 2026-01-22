@@ -15,6 +15,7 @@ from .core.repo_manager import RepoManager
 from .operations.registry import registry
 from .utils.filters import RepoFilter
 from .utils.progress import print_summary
+from .pipelines import pipeline_registry, PipelineExecutor
 
 
 def is_inside_git_repo(path: str) -> bool:
@@ -87,6 +88,11 @@ Examples:
         action='store_true',
         help='List available prompt templates and exit'
     )
+    parser.add_argument(
+        '--list-pipelines',
+        action='store_true',
+        help='List available pipelines and exit'
+    )
 
     # Subcommands (operations)
     subparsers = parser.add_subparsers(
@@ -138,6 +144,22 @@ Examples:
                 default='analyze',
                 help='Operation mode (default: analyze)'
             )
+
+    # Add pipeline subcommand
+    pipeline_parser = subparsers.add_parser(
+        'pipeline',
+        help='Execute a pipeline (new composable architecture)'
+    )
+    _add_common_args(pipeline_parser)
+    pipeline_parser.add_argument(
+        'pipeline_name',
+        help='Name of the pipeline to execute'
+    )
+    pipeline_parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Force execution, ignoring pipeline predicates'
+    )
 
     return parser
 
@@ -223,6 +245,63 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
 
 
 
+def _execute_pipeline(args, config, github_client, repos, logger):
+    """Execute a pipeline.
+
+    Args:
+        args: Parsed command line arguments
+        config: Configuration object
+        github_client: GitHub client
+        repos: List of repositories
+        logger: Logger instance
+
+    Returns:
+        Exit code
+    """
+    pipeline_name = args.pipeline_name
+
+    # Get pipeline class
+    pipeline_class = pipeline_registry.get(pipeline_name)
+    if not pipeline_class:
+        available = ', '.join(pipeline_registry.list_pipelines())
+        logger.error(f"Unknown pipeline: {pipeline_name}. Available: {available}")
+        return 1
+
+    # Create pipeline instance
+    pipeline = pipeline_class()
+
+    # Check if pipeline requires token
+    if pipeline.requires_token and not config.is_authenticated:
+        logger.error(
+            f"Pipeline '{pipeline_name}' requires a GitHub token. "
+            "Set GITHUB_TOKEN in .env or use --token"
+        )
+        return 1
+
+    # Create pipeline executor
+    executor = PipelineExecutor(
+        base_dir=config.repos_base_dir,
+        max_workers=config.max_workers,
+        sequential=config.sequential or not pipeline.safe_parallel,
+        clone_url_getter=github_client.get_clone_url
+    )
+
+    # Execute pipeline
+    results = executor.execute(
+        pipeline=pipeline,
+        repos=repos,
+        dry_run=args.dry_run,
+        force=getattr(args, 'force', False)
+    )
+
+    # Print summary
+    print_summary(results, operation_name=f"pipeline:{pipeline_name}")
+
+    # Return exit code based on failures
+    failed_count = sum(1 for r in results if r.failed)
+    return 1 if failed_count > 0 else 0
+
+
 def main():
     """Main entry point."""
     # Parse arguments
@@ -235,6 +314,16 @@ def main():
         print("Available prompt templates:")
         for name, template_class in template_registry.get_all_templates().items():
             print(f"  {name}: {template_class.description}")
+        return 0
+
+    # Handle --list-pipelines flag
+    if args.list_pipelines:
+        print("Available pipelines:")
+        for name in pipeline_registry.list_pipelines():
+            pipeline_class = pipeline_registry.get(name)
+            # Get description from class attribute
+            desc = getattr(pipeline_class, 'description', 'No description')
+            print(f"  {name}: {desc}")
         return 0
 
     # Check if operation is provided
@@ -296,6 +385,12 @@ def main():
         if not repos:
             logger.warning("No repositories match the filter criteria")
             return 0
+
+        # Handle pipeline command separately
+        if args.operation == 'pipeline':
+            return _execute_pipeline(
+                args, config, github_client, repos, logger
+            )
 
         # Get operation class
         operation_class = registry.get(args.operation)
