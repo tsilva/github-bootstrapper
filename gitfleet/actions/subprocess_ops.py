@@ -467,3 +467,151 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
         if self.condition:
             return f"Would run Claude CLI with skill: {skill_invocation} (condition: {self.condition[:50]}...)"
         return f"Would run Claude CLI with skill: {skill_invocation}"
+
+
+class ClaudeCommitMessageAction(Action):
+    """Generate commit message using Claude and prompt for review.
+
+    This action:
+    1. Gets the staged diff stats (git diff --cached --stat)
+    2. Asks Claude to generate a commit message
+    3. Prompts user for review/edit (unless skip_confirmation is set)
+    4. Stores the final message in ctx.variables['commit_message']
+    """
+
+    name = "claude-commit-message"
+    modifies_repo = False
+    description = "Generate commit message with Claude"
+
+    def __init__(self, timeout: int = 60):
+        """Initialize Claude commit message action.
+
+        Args:
+            timeout: Timeout in seconds for Claude CLI (default: 60)
+        """
+        self.timeout = timeout
+
+    def execute(self, ctx: 'RepoContext') -> ActionResult:
+        """Generate and review commit message."""
+        # Handle dry run
+        if ctx.dry_run:
+            return ActionResult(
+                status=Status.SUCCESS,
+                message=self.dry_run_message(ctx),
+                action_name=self.name,
+                metadata={'dry_run': True}
+            )
+
+        # 1. Get staged diff stats
+        try:
+            diff_result = subprocess.run(
+                ["git", "diff", "--cached", "--stat"],
+                cwd=ctx.repo_path,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            diff_stats = diff_result.stdout.strip()
+
+            if not diff_stats:
+                return ActionResult(
+                    status=Status.SKIPPED,
+                    message="No staged changes to commit",
+                    action_name=self.name
+                )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            return ActionResult(
+                status=Status.FAILED,
+                message=f"Failed to get diff stats: {e}",
+                action_name=self.name
+            )
+
+        # 2. Build prompt for Claude
+        prompt = f"""Generate a concise git commit message for these changes.
+
+Repository: {ctx.repo_name}
+Changes:
+{diff_stats}
+
+Rules:
+- First line: imperative mood, <50 chars (e.g., "Add user auth")
+- If needed, blank line then body with details
+- Output ONLY the commit message, nothing else"""
+
+        # 3. Call Claude CLI
+        try:
+            logger.info(f"Generating commit message for {ctx.repo_name}...")
+            result = subprocess.run(
+                ["claude", "-p", prompt, "--output-format", "text"],
+                cwd=ctx.repo_path,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout
+            )
+
+            if result.returncode != 0:
+                return ActionResult(
+                    status=Status.FAILED,
+                    message=f"Claude CLI failed: {result.stderr}",
+                    action_name=self.name,
+                    metadata={'stderr': result.stderr}
+                )
+
+            generated_message = result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            return ActionResult(
+                status=Status.FAILED,
+                message=f"Claude CLI timed out after {self.timeout}s",
+                action_name=self.name
+            )
+        except FileNotFoundError:
+            return ActionResult(
+                status=Status.FAILED,
+                message="Claude CLI not found - ensure 'claude' is installed",
+                action_name=self.name
+            )
+
+        # 4. Interactive review (skip if --yes flag)
+        if not ctx.get_variable('skip_confirmation', False):
+            print(f"\n[{ctx.repo_name}] Proposed commit message:")
+            print(f"---\n{generated_message}\n---")
+            print("(a)ccept, (e)dit, (s)kip repo: ", end="", flush=True)
+            response = input().strip().lower()
+
+            if response in ('s', 'skip'):
+                return ActionResult(
+                    status=Status.SKIPPED,
+                    message="User skipped",
+                    action_name=self.name
+                )
+            elif response in ('e', 'edit'):
+                print("Enter commit message (press Enter twice to finish):")
+                lines = []
+                empty_count = 0
+                while empty_count < 1:
+                    line = input()
+                    if line == "":
+                        empty_count += 1
+                    else:
+                        empty_count = 0
+                        lines.append(line)
+                new_message = "\n".join(lines).strip()
+                if new_message:
+                    generated_message = new_message
+                print(f"Using message: {generated_message[:50]}...")
+
+        # 5. Store in context
+        ctx.set_variable('commit_message', generated_message)
+
+        return ActionResult(
+            status=Status.SUCCESS,
+            message="Commit message generated",
+            action_name=self.name,
+            metadata={
+                'message': generated_message,
+                'diff_stats': diff_stats
+            }
+        )
+
+    def dry_run_message(self, ctx: 'RepoContext') -> str:
+        return f"Would generate commit message for {ctx.repo_name} using Claude"

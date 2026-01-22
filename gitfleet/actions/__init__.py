@@ -6,6 +6,9 @@ from .git import (
     CloneAction,
     PullAction,
     FetchAction,
+    GitAddAction,
+    GitCommitAction,
+    GitPushAction,
 )
 
 from .json_ops import (
@@ -18,6 +21,7 @@ from .subprocess_ops import (
     SubprocessAction,
     ClaudeCliAction,
     GhCliAction,
+    ClaudeCommitMessageAction,
 )
 
 from .description_sync import (
@@ -33,6 +37,9 @@ __all__ = [
     'CloneAction',
     'PullAction',
     'FetchAction',
+    'GitAddAction',
+    'GitCommitAction',
+    'GitPushAction',
     # JSON actions
     'JsonPatchAction',
     'JsonReadAction',
@@ -41,6 +48,7 @@ __all__ = [
     'SubprocessAction',
     'ClaudeCliAction',
     'GhCliAction',
+    'ClaudeCommitMessageAction',
     # Description sync
     'DescriptionSyncAction',
     'extract_tagline',

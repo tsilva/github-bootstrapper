@@ -1,4 +1,4 @@
-"""Git operation pipelines (sync, clone-only, pull-only)."""
+"""Git operation pipelines (sync, clone-only, pull-only, commit-push)."""
 
 from typing import Optional, Callable, Dict, Any
 
@@ -6,10 +6,12 @@ from .base import Pipeline
 from ..predicates import (
     RepoExists,
     RepoClean,
+    HasUncommittedChanges,
     not_,
     all_of,
 )
-from ..actions.git import CloneAction, PullAction
+from ..actions.git import CloneAction, PullAction, GitAddAction, GitCommitAction, GitPushAction
+from ..actions.subprocess_ops import ClaudeCommitMessageAction
 
 
 class SyncPipeline(Pipeline):
@@ -97,3 +99,39 @@ def create_clone_only_pipeline() -> CloneOnlyPipeline:
 def create_pull_only_pipeline() -> PullOnlyPipeline:
     """Create a pull-only pipeline."""
     return PullOnlyPipeline()
+
+
+class CommitPushPipeline(Pipeline):
+    """Commit changes with Claude-generated message and push.
+
+    This pipeline:
+    1. Finds repos with uncommitted changes
+    2. Stages all changes (git add .)
+    3. Uses Claude to generate a commit message based on diff stats
+    4. Shows message for user review/edit before committing
+    5. Commits with the (possibly edited) message
+    6. Pushes to remote
+    """
+
+    name = "commit-push"
+    description = "Stage, commit (Claude-generated message), and push changes"
+    requires_token = False
+    safe_parallel = False  # Claude API rate limits + user interaction
+
+    def __init__(self):
+        """Initialize commit-push pipeline."""
+        super().__init__()
+
+        # Only run on repos with uncommitted changes
+        self.when(RepoExists(), HasUncommittedChanges())
+
+        # Sequential actions
+        self.then(GitAddAction())
+        self.then(ClaudeCommitMessageAction())
+        self.then(GitCommitAction())
+        self.then(GitPushAction())
+
+
+def create_commit_push_pipeline() -> CommitPushPipeline:
+    """Create a commit-push pipeline."""
+    return CommitPushPipeline()

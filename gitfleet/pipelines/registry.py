@@ -22,7 +22,7 @@ class PipelineRegistry:
 
     def _register_builtin_pipelines(self) -> None:
         """Register all built-in pipelines."""
-        from .git_ops import SyncPipeline, CloneOnlyPipeline, PullOnlyPipeline
+        from .git_ops import SyncPipeline, CloneOnlyPipeline, PullOnlyPipeline, CommitPushPipeline
         from .settings_ops import SandboxEnablePipeline, SettingsCleanPipeline
         from .subprocess_ops import DescriptionSyncPipeline, ClaudePipeline
 
@@ -30,6 +30,7 @@ class PipelineRegistry:
         self.register(SyncPipeline)
         self.register(CloneOnlyPipeline)
         self.register(PullOnlyPipeline)
+        self.register(CommitPushPipeline)
 
         # Settings operations
         self.register(SandboxEnablePipeline)

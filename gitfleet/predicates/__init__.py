@@ -27,6 +27,7 @@ from .core import (
     OwnerIs,
     HasGitDirectory,
     ForceEnabled,
+    HasUncommittedChanges,
     REPO_EXISTS_AND_CLEAN,
     ACTIVE_REPO,
 )
@@ -57,6 +58,7 @@ __all__ = [
     'OwnerIs',
     'HasGitDirectory',
     'ForceEnabled',
+    'HasUncommittedChanges',
     # Pre-built combinations
     'REPO_EXISTS_AND_CLEAN',
     'ACTIVE_REPO',

@@ -12,9 +12,11 @@ from .git_ops import (
     SyncPipeline,
     CloneOnlyPipeline,
     PullOnlyPipeline,
+    CommitPushPipeline,
     create_sync_pipeline,
     create_clone_only_pipeline,
     create_pull_only_pipeline,
+    create_commit_push_pipeline,
 )
 
 from .settings_ops import (
@@ -50,9 +52,11 @@ __all__ = [
     'SyncPipeline',
     'CloneOnlyPipeline',
     'PullOnlyPipeline',
+    'CommitPushPipeline',
     'create_sync_pipeline',
     'create_clone_only_pipeline',
     'create_pull_only_pipeline',
+    'create_commit_push_pipeline',
     # Settings pipelines
     'SandboxEnablePipeline',
     'SettingsCleanPipeline',

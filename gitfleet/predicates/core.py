@@ -1,6 +1,7 @@
 """Core reusable predicates for repository operations."""
 
 import os
+import subprocess
 from typing import Tuple, TYPE_CHECKING
 
 from .base import Predicate
@@ -194,6 +195,29 @@ class ForceEnabled(Predicate):
         if ctx.force:
             return True, "Force mode enabled"
         return False, "Force mode not enabled"
+
+
+class HasUncommittedChanges(Predicate):
+    """Check if repo has uncommitted changes (staged or unstaged)."""
+
+    def check(self, ctx: 'RepoContext') -> Tuple[bool, str]:
+        if not os.path.exists(ctx.repo_path):
+            return False, "Repository doesn't exist locally"
+
+        try:
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=ctx.repo_path,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            has_changes = bool(result.stdout.strip())
+            if has_changes:
+                return True, "Repository has uncommitted changes"
+            return False, "Repository has no uncommitted changes"
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            return False, "Failed to check repository status"
 
 
 # Pre-built common predicate combinations
