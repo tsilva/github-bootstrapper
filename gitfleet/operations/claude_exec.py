@@ -127,10 +127,21 @@ class ClaudeExecOperation(Operation):
 
         # Ask for confirmation unless --yes flag or dry-run
         if not self.yes and not dry_run:
-            response = input("\nProceed with execution? [y/N]: ")
+            import sys
+            # When stdin is piped, read from /dev/tty to get user input
+            if sys.stdin.isatty():
+                response = input("\nProceed with execution? [y/N]: ")
+            else:
+                try:
+                    with open('/dev/tty', 'r') as tty:
+                        print("\nProceed with execution? [y/N]: ", end='', flush=True)
+                        response = tty.readline().strip()
+                except OSError:
+                    # /dev/tty not available (e.g., non-interactive environment)
+                    print("\nNo TTY available for confirmation. Use --yes flag to skip prompt.")
+                    sys.exit(1)
             if response.lower() != 'y':
                 print("Execution cancelled.")
-                import sys
                 sys.exit(0)
 
     def execute(self, repo: Dict, repo_path: str) -> OperationResult:
