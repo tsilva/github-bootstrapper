@@ -74,13 +74,10 @@ Examples:
   # Clean Claude settings
   gitfleet settings-clean --mode analyze
 
-  # Use skill pipelines (new)
-  gitfleet pipeline claude-settings-optimizer --mode analyze
-  gitfleet pipeline readme-generator
-  gitfleet pipeline logo-generator
-
-  # Skill pipelines with conditions (Claude evaluates)
-  gitfleet pipeline readme-generator --condition "README tagline does NOT contain an emoji"
+  # Use claude pipeline to run prompts or skills
+  gitfleet pipeline claude "/readme-generator" --repo my-repo
+  gitfleet pipeline claude "/claude-settings-optimizer --mode analyze"
+  gitfleet pipeline claude "Add a LICENSE file"
 
   # Filter by organization
   gitfleet sync --org mycompany --private-only
@@ -164,20 +161,20 @@ Examples:
         help='Name of the pipeline to execute'
     )
     pipeline_parser.add_argument(
+        'prompt',
+        nargs='?',
+        help='Prompt for claude pipeline (e.g., "/readme-generator" or "Add tests")'
+    )
+    pipeline_parser.add_argument(
         '--force',
         action='store_true',
         help='Force execution, ignoring pipeline predicates'
     )
     pipeline_parser.add_argument(
-        '--condition',
-        metavar='CONDITION',
-        help='Natural language condition for Claude to evaluate (for skill pipelines)'
-    )
-    pipeline_parser.add_argument(
         '--mode',
         choices=['analyze', 'clean', 'auto-fix'],
         default='analyze',
-        help='Operation mode for settings-optimizer/settings-clean (default: analyze)'
+        help='Operation mode for settings-clean (default: analyze)'
     )
 
     return parser
@@ -289,16 +286,16 @@ def _execute_pipeline(args, config, github_client, repos, logger):
     # Build pipeline kwargs based on pipeline type
     pipeline_kwargs = {}
 
-    # Skill pipelines that support --condition
-    condition_pipelines = ['readme-generator', 'logo-generator', 'name-generator']
-    if pipeline_name in condition_pipelines:
-        condition = getattr(args, 'condition', None)
-        if condition:
-            pipeline_kwargs['condition'] = condition
+    # Claude pipeline requires a prompt
+    if pipeline_name == 'claude':
+        prompt = getattr(args, 'prompt', None)
+        if not prompt:
+            logger.error("The 'claude' pipeline requires a prompt argument")
+            return 1
+        pipeline_kwargs['prompt'] = prompt
 
     # Pipelines that support --mode
-    mode_pipelines = ['claude-settings-optimizer', 'settings-clean']
-    if pipeline_name in mode_pipelines:
+    if pipeline_name == 'settings-clean':
         mode = getattr(args, 'mode', 'analyze')
         pipeline_kwargs['mode'] = mode
 

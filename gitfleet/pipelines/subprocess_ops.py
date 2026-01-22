@@ -33,25 +33,24 @@ class DescriptionSyncPipeline(Pipeline):
         self.then(DescriptionSyncAction())
 
 
-class ClaudeExecPipeline(Pipeline):
+class ClaudePipeline(Pipeline):
     """Execute Claude CLI with a prompt.
 
-    Note: This is a simplified version. The full ClaudeExecOperation
-    has additional features like templates, pre_batch_hooks, and
-    variable substitution that would need to be handled separately.
+    This pipeline runs any prompt through Claude CLI, including skill invocations
+    like "/readme-generator" or "/claude-settings-optimizer --mode analyze".
     """
 
-    name = "claude-exec"
-    description = "Execute Claude CLI prompt"
+    name = "claude"
+    description = "Execute Claude CLI prompt (supports skills via /skill-name)"
     requires_token = False
     safe_parallel = False  # Sequential for API rate limits
     show_progress_only = True
 
     def __init__(self, prompt: str, timeout: int = 300):
-        """Initialize claude-exec pipeline.
+        """Initialize claude pipeline.
 
         Args:
-            prompt: The prompt to execute
+            prompt: The prompt to execute (can be a skill like "/readme-generator")
             timeout: Timeout in seconds
         """
         super().__init__()
@@ -69,8 +68,8 @@ def create_description_sync_pipeline() -> DescriptionSyncPipeline:
     return DescriptionSyncPipeline()
 
 
-def create_claude_exec_pipeline(prompt: str, timeout: int = 300) -> ClaudeExecPipeline:
-    """Create a claude-exec pipeline.
+def create_claude_pipeline(prompt: str, timeout: int = 300) -> ClaudePipeline:
+    """Create a claude pipeline.
 
     Args:
         prompt: The prompt to execute
@@ -79,4 +78,4 @@ def create_claude_exec_pipeline(prompt: str, timeout: int = 300) -> ClaudeExecPi
     Returns:
         Configured pipeline
     """
-    return ClaudeExecPipeline(prompt=prompt, timeout=timeout)
+    return ClaudePipeline(prompt=prompt, timeout=timeout)

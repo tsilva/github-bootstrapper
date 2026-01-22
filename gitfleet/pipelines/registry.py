@@ -24,13 +24,7 @@ class PipelineRegistry:
         """Register all built-in pipelines."""
         from .git_ops import SyncPipeline, CloneOnlyPipeline, PullOnlyPipeline
         from .settings_ops import SandboxEnablePipeline, SettingsCleanPipeline
-        from .subprocess_ops import DescriptionSyncPipeline, ClaudeExecPipeline
-        from .skill_ops import (
-            ReadmeGeneratorPipeline,
-            LogoGeneratorPipeline,
-            SettingsOptimizerPipeline,
-            RepoNameGeneratorPipeline,
-        )
+        from .subprocess_ops import DescriptionSyncPipeline, ClaudePipeline
 
         # Git operations
         self.register(SyncPipeline)
@@ -43,13 +37,7 @@ class PipelineRegistry:
 
         # Subprocess operations
         self.register(DescriptionSyncPipeline)
-        self.register(ClaudeExecPipeline)
-
-        # Skill-based operations
-        self.register(ReadmeGeneratorPipeline)
-        self.register(LogoGeneratorPipeline)
-        self.register(SettingsOptimizerPipeline)
-        self.register(RepoNameGeneratorPipeline)
+        self.register(ClaudePipeline)
 
     def register(self, pipeline_class: Type[Pipeline]) -> None:
         """Register a pipeline class.
