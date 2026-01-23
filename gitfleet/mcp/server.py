@@ -15,10 +15,12 @@ from mcp.types import Tool, TextContent
 
 from .tools import (
     list_repos,
-    exec_command,
+    exec_command_parallel,
+    exec_claude_single,
     sync_repos,
     get_status,
     RepoInfo,
+    ExecRepoResult,
     ExecutionResult,
     SyncResult,
     StatusSummary,
@@ -96,21 +98,21 @@ Supported filters:
     ),
     Tool(
         name="gitfleet_exec",
-        description="""Execute commands across multiple repositories.
+        description="""Execute commands across multiple repositories in PARALLEL.
 
-This is the main workhorse tool for running operations across repos.
+This tool runs git, gh, and shell commands with parallel execution for fast multi-repo operations.
 
 Command prefixes:
-- "claude:" - Run Claude CLI with a prompt (e.g., "claude:Add a LICENSE file")
-- "claude:/" - Run a Claude skill (e.g., "claude:/readme-generator")
 - "gh:" - Run GitHub CLI command (e.g., "gh:pr list")
 - "git:" - Run git command (e.g., "git:status")
 - No prefix - Run shell command (e.g., "npm install")
 
+NOTE: Claude commands are NOT supported by this tool. Use gitfleet_claude_exec instead,
+which takes a single repo and allows caller-side parallelization via multiple MCP calls.
+
 Examples:
-- Run Claude skill: repos=["repo-a", "repo-b"], command="claude:/readme-generator"
-- Run Claude prompt: repos=["repo-a"], command="claude:Add comprehensive docstrings"
 - Run git command: repos=["repo-a", "repo-b"], command="git:status"
+- Run gh command: repos=["repo-a", "repo-b"], command="gh:pr list"
 - Run shell command: repos=["repo-a"], command="npm install"
 
 The tool returns structured results showing which repos succeeded, failed, or were skipped.""",
@@ -124,7 +126,7 @@ The tool returns structured results showing which repos succeeded, failed, or we
                 },
                 "command": {
                     "type": "string",
-                    "description": "Command to execute (with optional prefix: claude:, gh:, git:)"
+                    "description": "Command to execute (with optional prefix: gh:, git:)"
                 },
                 "dry_run": {
                     "type": "boolean",
@@ -133,11 +135,57 @@ The tool returns structured results showing which repos succeeded, failed, or we
                 },
                 "timeout": {
                     "type": "integer",
-                    "description": "Timeout in seconds per repo (default: 300)",
-                    "default": 300
+                    "description": "Timeout in seconds per repo (default: 60)",
+                    "default": 60
+                },
+                "max_workers": {
+                    "type": "integer",
+                    "description": "Maximum parallel workers (default: 8)",
+                    "default": 8
                 }
             },
             "required": ["repos", "command"]
+        }
+    ),
+    Tool(
+        name="gitfleet_claude_exec",
+        description="""Execute a Claude prompt or skill on a SINGLE repository.
+
+For multi-repo Claude operations, invoke this tool multiple times in parallel.
+This design avoids rate limit issues from internal parallelization.
+
+Command formats:
+- Raw prompt: "Add a LICENSE file"
+- Skill invocation: "/readme-generator"
+
+Examples:
+- repo="my-repo", prompt="/readme-generator"
+- repo="my-repo", prompt="Add comprehensive docstrings"
+
+Returns success/failure with Claude's output.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Single repository name"
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Claude prompt or skill (e.g., 'Add tests' or '/readme-generator')"
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Preview without executing (default: false)",
+                    "default": False
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Timeout in seconds (default: 300)",
+                    "default": 300
+                }
+            },
+            "required": ["repo", "prompt"]
         }
     ),
     Tool(
@@ -238,17 +286,36 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             )
 
         elif name == "gitfleet_exec":
-            result = exec_command(
+            result = exec_command_parallel(
                 repos=arguments["repos"],
                 command=arguments["command"],
                 dry_run=arguments.get("dry_run", False),
-                timeout=arguments.get("timeout", 300)
+                timeout=arguments.get("timeout", 60),
+                max_workers=arguments.get("max_workers", 8)
             )
             output = result.to_dict()
             duration_ms = int((time.time() - start_time) * 1000)
             log_summary(
                 name, total=result.total, success=len(result.success),
                 failed=len(result.failed), skipped=len(result.skipped),
+                duration_ms=duration_ms, logger=logger
+            )
+
+        elif name == "gitfleet_claude_exec":
+            result = exec_claude_single(
+                repo=arguments["repo"],
+                prompt=arguments["prompt"],
+                dry_run=arguments.get("dry_run", False),
+                timeout=arguments.get("timeout", 300)
+            )
+            output = result.to_dict()
+            duration_ms = int((time.time() - start_time) * 1000)
+            success_count = 1 if result.status == "success" else 0
+            failed_count = 1 if result.status == "failed" else 0
+            skipped_count = 1 if result.status == "skipped" else 0
+            log_summary(
+                name, total=1, success=success_count,
+                failed=failed_count, skipped=skipped_count,
                 duration_ms=duration_ms, logger=logger
             )
 
