@@ -76,6 +76,17 @@ Supported filters:
                     "items": {"type": "string"},
                     "description": "Filter strings like ['!archived', '!fork', 'language:python']",
                     "default": []
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Fields to return (default: ['name']). Use ['all'] for all fields. Available: name, full_name, description, language, private, fork, archived, default_branch, html_url, local_path, exists_locally",
+                    "default": ["name"]
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max repos to return (default: 100, max: 1000)",
+                    "default": 100
                 }
             },
             "required": ["source"]
@@ -215,14 +226,18 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
 
     try:
         if name == "gitfleet_list_repos":
+            fields = arguments.get("fields", ["name"])
+            limit = arguments.get("limit", 100)
             result = list_repos(
                 source=arguments["source"],
-                filters=arguments.get("filters", [])
+                filters=arguments.get("filters", []),
+                fields=fields,
+                limit=limit
             )
-            # Convert to serializable format
+            # Convert to serializable format with field selection
             output = {
                 "count": len(result),
-                "repos": [r.to_dict() for r in result]
+                "repos": [r.to_dict(fields) for r in result]
             }
             duration_ms = int((time.time() - start_time) * 1000)
             log_summary(

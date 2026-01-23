@@ -42,8 +42,17 @@ class RepoInfo:
     local_path: Optional[str] = None
     exists_locally: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+    def to_dict(self, fields: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Convert to dictionary with optional field selection.
+
+        Args:
+            fields: List of fields to include. Use None or ["all"] for all fields.
+                   Default returns all fields.
+        """
+        data = asdict(self)
+        if fields is None or "all" in fields:
+            return data
+        return {k: v for k, v in data.items() if k in fields}
 
 
 @dataclass
@@ -451,13 +460,17 @@ def _get_sync_status(repo_path: str, fetch: bool = True) -> Dict[str, Any]:
 
 def list_repos(
     source: str,
-    filters: Optional[List[str]] = None
+    filters: Optional[List[str]] = None,
+    fields: Optional[List[str]] = None,
+    limit: int = 100
 ) -> List[RepoInfo]:
     """List repositories based on source and filters.
 
     Args:
         source: Repository source - "github", "github:owner", "local", or comma-separated repo names
         filters: Optional list of filters like ["!archived", "!fork", "language:python"]
+        fields: Optional list of fields to return. Use ["all"] for all fields.
+        limit: Maximum number of repos to return (default: 100, max: 1000)
 
     Returns:
         List of RepoInfo objects
@@ -470,12 +483,15 @@ def list_repos(
 
     repos = []
 
+    # Clamp limit to max 1000
+    limit = min(limit, 1000)
+
     if source == "github" or source.startswith("github:"):
         # Extract owner if provided
         owner = source[7:] if source.startswith("github:") else None
 
         # Get repos via gh CLI
-        github_repos = _gh_repo_list(owner)
+        github_repos = _gh_repo_list(owner, limit=limit)
         github_repos = _apply_filters(github_repos, filter_params)
 
         for repo in github_repos:
@@ -563,6 +579,8 @@ def list_repos(
                 exists_locally=_repo_exists(local_path)
             ))
 
+    # Apply limit
+    repos = repos[:limit]
     local_count = sum(1 for r in repos if r.exists_locally)
     logger.info(f"list_repos: returning {len(repos)} repos ({local_count} exist locally)")
     return repos
@@ -638,6 +656,7 @@ def exec_command(
                 output=f"[DRY RUN] Would execute: {command}"
             )
 
+        import time
         try:
             if cmd_type == "claude":
                 # Execute Claude CLI
@@ -647,15 +666,20 @@ def exec_command(
                     "--permission-mode", "acceptEdits",
                     "--output-format", "json"
                 ]
+                cmd_preview = f"claude -p '{cmd_value[:80]}{'...' if len(cmd_value) > 80 else ''}'"
             elif cmd_type == "gh":
                 cmd = ["gh"] + cmd_value.split()
+                cmd_preview = f"gh {cmd_value}"
             elif cmd_type == "git":
                 cmd = ["git"] + cmd_value.split()
+                cmd_preview = f"git {cmd_value}"
             else:
                 # Shell command - use shell=True for complex commands
                 cmd = cmd_value
+                cmd_preview = cmd_value[:100] + ('...' if len(cmd_value) > 100 else '')
 
-            logger.debug(f"{repo_name}: executing {cmd}")
+            logger.debug(f"{repo_name}: executing {cmd_preview} | timeout: {timeout}s | cwd: {repo_path}")
+            start_time = time.time()
 
             proc_result = subprocess.run(
                 cmd,
@@ -666,7 +690,9 @@ def exec_command(
                 shell=isinstance(cmd, str)
             )
 
+            duration = time.time() - start_time
             if proc_result.returncode == 0:
+                logger.debug(f"{repo_name}: command completed | duration: {duration:.1f}s")
                 log_repo_result(repo_name, "success", "Command completed")
                 return ExecRepoResult(
                     repo=repo_name,
@@ -675,6 +701,7 @@ def exec_command(
                     return_code=proc_result.returncode
                 )
             else:
+                logger.debug(f"{repo_name}: command failed | exit: {proc_result.returncode} | duration: {duration:.1f}s | stderr: {proc_result.stderr[:200] if proc_result.stderr else 'none'}")
                 log_repo_result(repo_name, "failed", f"Exit code {proc_result.returncode}")
                 return ExecRepoResult(
                     repo=repo_name,
@@ -685,6 +712,10 @@ def exec_command(
                 )
 
         except subprocess.TimeoutExpired:
+            logger.error(
+                f"exec_command timed out after {timeout}s for {repo_name} | "
+                f"cmd_type: {cmd_type} | cmd: {cmd_preview} | cwd: {repo_path}"
+            )
             log_repo_result(repo_name, "failed", f"Timed out after {timeout}s")
             return ExecRepoResult(
                 repo=repo_name,
@@ -692,6 +723,7 @@ def exec_command(
                 error=f"Command timed out after {timeout}s"
             )
         except FileNotFoundError as e:
+            logger.error(f"Command not found for {repo_name} | cmd_type: {cmd_type} | error: {e}")
             log_repo_result(repo_name, "failed", f"Command not found: {e}")
             return ExecRepoResult(
                 repo=repo_name,
@@ -699,6 +731,7 @@ def exec_command(
                 error=f"Command not found: {e}"
             )
         except Exception as e:
+            logger.error(f"exec_command error for {repo_name} | cmd_type: {cmd_type} | error: {e}", exc_info=True)
             log_repo_result(repo_name, "failed", str(e))
             return ExecRepoResult(
                 repo=repo_name,

@@ -64,6 +64,11 @@ class SubprocessAction(Action):
         if self.env:
             env.update(self.env)
 
+        import time
+        cmd_preview = ' '.join(self.command[:3]) + ('...' if len(self.command) > 3 else '')
+        logger.debug(f"Subprocess starting for {ctx.repo_name} | cmd: {cmd_preview} | timeout: {self.timeout}s | cwd: {ctx.repo_path}")
+        start_time = time.time()
+
         try:
             result = subprocess.run(
                 self.command,
@@ -76,6 +81,8 @@ class SubprocessAction(Action):
                 text=True
             )
 
+            duration = time.time() - start_time
+            logger.debug(f"Subprocess completed for {ctx.repo_name} | cmd: {cmd_preview} | duration: {duration:.1f}s | exit: {result.returncode}")
             return ActionResult(
                 status=Status.SUCCESS,
                 message=f"Command succeeded: {' '.join(self.command[:2])}...",
@@ -89,13 +96,19 @@ class SubprocessAction(Action):
             )
 
         except subprocess.TimeoutExpired:
+            logger.error(
+                f"Subprocess timed out after {self.timeout}s for {ctx.repo_name} | "
+                f"cmd: {cmd_preview} | cwd: {ctx.repo_path}"
+            )
             return ActionResult(
                 status=Status.FAILED,
                 message=f"Command timed out after {self.timeout}s",
                 action_name=self.name,
-                metadata={'command': self.command, 'timeout': self.timeout}
+                metadata={'command': self.command, 'timeout': self.timeout, 'repo': ctx.repo_name}
             )
         except subprocess.CalledProcessError as e:
+            duration = time.time() - start_time
+            logger.debug(f"Subprocess failed for {ctx.repo_name} | cmd: {cmd_preview} | exit: {e.returncode} | duration: {duration:.1f}s")
             return ActionResult(
                 status=Status.FAILED,
                 message=f"Command failed with exit code {e.returncode}",
@@ -107,7 +120,16 @@ class SubprocessAction(Action):
                     'stderr': e.stderr if self.capture_output else None
                 }
             )
+        except FileNotFoundError as e:
+            logger.error(f"Command not found for {ctx.repo_name} | cmd: {cmd_preview} | error: {e}")
+            return ActionResult(
+                status=Status.FAILED,
+                message=f"Command not found: {e}",
+                action_name=self.name,
+                metadata={'command': self.command, 'error': str(e)}
+            )
         except Exception as e:
+            logger.error(f"Subprocess error for {ctx.repo_name} | cmd: {cmd_preview} | error: {e}", exc_info=True)
             return ActionResult(
                 status=Status.FAILED,
                 message=f"Command error: {e}",
@@ -155,8 +177,13 @@ class ClaudeCliAction(Action):
             "--output-format", "json"
         ]
 
+        import time
+        prompt_preview = self.prompt[:100] + '...' if len(self.prompt) > 100 else self.prompt
+        logger.info(f"Running Claude CLI for {ctx.repo_name} | timeout: {self.timeout}s | prompt: {prompt_preview}")
+        logger.debug(f"Claude CLI command: {' '.join(command[:4])}... | cwd: {ctx.repo_path}")
+        start_time = time.time()
+
         try:
-            logger.info(f"Running Claude CLI for {ctx.repo_name}...")
             result = subprocess.run(
                 command,
                 cwd=ctx.repo_path,
@@ -165,7 +192,9 @@ class ClaudeCliAction(Action):
                 timeout=self.timeout
             )
 
+            duration = time.time() - start_time
             if result.returncode == 0:
+                logger.debug(f"Claude CLI completed for {ctx.repo_name} | duration: {duration:.1f}s")
                 return ActionResult(
                     status=Status.SUCCESS,
                     message="Claude CLI completed",
@@ -177,6 +206,7 @@ class ClaudeCliAction(Action):
                     }
                 )
             else:
+                logger.debug(f"Claude CLI failed for {ctx.repo_name} | exit: {result.returncode} | duration: {duration:.1f}s | stderr: {result.stderr[:200] if result.stderr else 'none'}")
                 return ActionResult(
                     status=Status.FAILED,
                     message=f"Claude CLI failed with exit code {result.returncode}",
@@ -189,19 +219,25 @@ class ClaudeCliAction(Action):
                 )
 
         except subprocess.TimeoutExpired:
+            logger.error(
+                f"Claude CLI timed out after {self.timeout}s for {ctx.repo_name} | "
+                f"prompt: {prompt_preview} | cwd: {ctx.repo_path}"
+            )
             return ActionResult(
                 status=Status.FAILED,
                 message=f"Claude CLI timed out after {self.timeout}s",
                 action_name=self.name,
-                metadata={'timeout': self.timeout}
+                metadata={'timeout': self.timeout, 'repo': ctx.repo_name, 'prompt': self.prompt}
             )
         except FileNotFoundError:
+            logger.error(f"Claude CLI not found for {ctx.repo_name} | ensure 'claude' is installed and in PATH")
             return ActionResult(
                 status=Status.FAILED,
                 message="Claude CLI not found - ensure 'claude' is installed",
                 action_name=self.name
             )
         except Exception as e:
+            logger.error(f"Claude CLI error for {ctx.repo_name} | prompt: {prompt_preview} | error: {e}", exc_info=True)
             return ActionResult(
                 status=Status.FAILED,
                 message=f"Claude CLI error: {e}",
@@ -390,8 +426,13 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
             "--output-format", "json"
         ]
 
+        import time
+        prompt_preview = prompt[:100] + '...' if len(prompt) > 100 else prompt
+        logger.info(f"Running skill /{self.skill} for {ctx.repo_name} | timeout: {self.timeout}s")
+        logger.debug(f"Skill prompt: {prompt_preview} | cwd: {ctx.repo_path}")
+        start_time = time.time()
+
         try:
-            logger.info(f"Running skill /{self.skill} for {ctx.repo_name}...")
             result = subprocess.run(
                 command,
                 cwd=ctx.repo_path,
@@ -400,8 +441,11 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
                 timeout=self.timeout
             )
 
+            duration = time.time() - start_time
+
             # Check if the response indicates a skip
             if self.condition and self.skip_message in result.stdout:
+                logger.debug(f"Skill /{self.skill} skipped for {ctx.repo_name} | condition not met | duration: {duration:.1f}s")
                 return ActionResult(
                     status=Status.SKIPPED,
                     message=f"Skipped: {self.skip_message}",
@@ -415,6 +459,7 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
                 )
 
             if result.returncode == 0:
+                logger.debug(f"Skill /{self.skill} completed for {ctx.repo_name} | duration: {duration:.1f}s")
                 return ActionResult(
                     status=Status.SUCCESS,
                     message=f"Skill /{self.skill} completed",
@@ -427,6 +472,7 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
                     }
                 )
             else:
+                logger.debug(f"Skill /{self.skill} failed for {ctx.repo_name} | exit: {result.returncode} | duration: {duration:.1f}s | stderr: {result.stderr[:200] if result.stderr else 'none'}")
                 return ActionResult(
                     status=Status.FAILED,
                     message=f"Skill /{self.skill} failed with exit code {result.returncode}",
@@ -440,19 +486,25 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
                 )
 
         except subprocess.TimeoutExpired:
+            logger.error(
+                f"Skill /{self.skill} timed out after {self.timeout}s for {ctx.repo_name} | "
+                f"prompt: {prompt_preview} | cwd: {ctx.repo_path}"
+            )
             return ActionResult(
                 status=Status.FAILED,
                 message=f"Skill /{self.skill} timed out after {self.timeout}s",
                 action_name=self.name,
-                metadata={'skill': self.skill, 'timeout': self.timeout}
+                metadata={'skill': self.skill, 'timeout': self.timeout, 'repo': ctx.repo_name}
             )
         except FileNotFoundError:
+            logger.error(f"Claude CLI not found for {ctx.repo_name} | ensure 'claude' is installed and in PATH")
             return ActionResult(
                 status=Status.FAILED,
                 message="Claude CLI not found - ensure 'claude' is installed",
                 action_name=self.name
             )
         except Exception as e:
+            logger.error(f"Skill /{self.skill} error for {ctx.repo_name} | error: {e}", exc_info=True)
             return ActionResult(
                 status=Status.FAILED,
                 message=f"Skill error: {e}",
