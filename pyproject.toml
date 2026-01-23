@@ -3,16 +3,18 @@ name = "gitfleet"
 version = "0.1.0"
 description = "Sync all your GitHub repositories locally with parallel processing and smart change detection"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 dependencies = [
     "requests>=2.31.0",
     "PyGithub>=2.1.1",
     "python-dotenv>=1.0.0",
+    "mcp>=1.0.0",
 ]
 
 [project.scripts]
 gitfleet = "gitfleet.__main__:main"
+gitfleet-mcp = "gitfleet.mcp:main"
 
 [build-system]
 requires = ["hatchling"]
