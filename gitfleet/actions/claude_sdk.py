@@ -76,17 +76,18 @@ class ClaudeSDKAction(Action):
                 permission_mode="acceptEdits"
             )
 
-            result = await query(
-                prompt=self.prompt,
-                options=options
-            )
+            async def consume_query():
+                """Consume async iterator and return result."""
+                async for message in query(prompt=self.prompt, options=options):
+                    if hasattr(message, 'result'):
+                        return message.result, getattr(message, 'total_cost_usd', None)
+                return None, None
+
+            # query() returns an AsyncIterator[Message], must iterate to get results
+            result_text, cost = await asyncio.wait_for(consume_query(), timeout=self.timeout)
 
             duration = time.time() - start_time
             logger.debug(f"Claude SDK completed for {ctx.repo_name} | duration: {duration:.1f}s")
-
-            # Extract result data
-            result_text = result.result if hasattr(result, 'result') else str(result)
-            cost = getattr(result, 'total_cost_usd', None)
 
             return ActionResult(
                 status=Status.SUCCESS,
@@ -95,8 +96,7 @@ class ClaudeSDKAction(Action):
                 metadata={
                     'result': result_text[:5000] if result_text else None,
                     'cost_usd': cost,
-                    'duration': duration,
-                    'session_id': getattr(result, 'session_id', None)
+                    'duration': duration
                 }
             )
 
@@ -246,13 +246,17 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
                 permission_mode="acceptEdits"
             )
 
-            result = await query(
-                prompt=prompt,
-                options=options
-            )
+            async def consume_query():
+                """Consume async iterator and return result."""
+                async for message in query(prompt=prompt, options=options):
+                    if hasattr(message, 'result'):
+                        return message.result, getattr(message, 'total_cost_usd', None)
+                return None, None
+
+            # query() returns an AsyncIterator[Message], must iterate to get results
+            result_text, cost_usd = await asyncio.wait_for(consume_query(), timeout=self.timeout)
 
             duration = time.time() - start_time
-            result_text = result.result if hasattr(result, 'result') else str(result)
 
             # Check if the response indicates a skip
             if self.condition and self.skip_message in (result_text or ''):
@@ -276,7 +280,7 @@ If the condition is FALSE: Respond ONLY with: {self.skip_message}"""
                 metadata={
                     'skill': self.skill,
                     'result': result_text[:5000] if result_text else None,
-                    'cost_usd': getattr(result, 'total_cost_usd', None),
+                    'cost_usd': cost_usd,
                     'duration': duration
                 }
             )

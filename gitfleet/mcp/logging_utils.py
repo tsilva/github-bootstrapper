@@ -203,3 +203,97 @@ def log_tool_invocation(
     log = logger or get_mcp_logger()
     log.info(f"Tool invoked: {tool_name}")
     log.debug(f"Arguments: {arguments}")
+
+
+# ============================================================================
+# Claude execution logging
+# ============================================================================
+
+def log_claude_session_start(
+    session_id: str,
+    repos: list,
+    command: str,
+    parallel: bool,
+    workers: int,
+    logger: Optional[logging.Logger] = None
+) -> None:
+    """Log start of Claude execution session.
+
+    Args:
+        session_id: Unique session identifier
+        repos: List of repository names
+        command: The Claude command being executed
+        parallel: Whether execution is parallel
+        workers: Number of parallel workers
+        logger: Optional logger instance
+    """
+    log = logger or get_mcp_logger()
+    log.info(f"[claude-exec] Session {session_id}: {len(repos)} repos, parallel={parallel}, workers={workers}")
+    cmd_preview = command[:100] + '...' if len(command) > 100 else command
+    log.info(f"[claude-exec] Command: {cmd_preview}")
+
+
+def log_claude_worker_start(
+    session_id: str,
+    worker_id: int,
+    repo: str,
+    prompt_preview: str,
+    logger: Optional[logging.Logger] = None
+) -> None:
+    """Log Claude worker starting execution.
+
+    Args:
+        session_id: Session identifier
+        worker_id: Worker thread identifier
+        repo: Repository name
+        prompt_preview: Truncated prompt for logging
+        logger: Optional logger instance
+    """
+    log = logger or get_mcp_logger()
+    log.info(f"[{session_id}][worker-{worker_id}] {repo}: Starting")
+    log.debug(f"[{session_id}][worker-{worker_id}] {repo}: prompt={prompt_preview}")
+
+
+def log_claude_worker_complete(
+    session_id: str,
+    worker_id: int,
+    repo: str,
+    success: bool,
+    output_chars: int,
+    duration_s: float,
+    log_path: Optional[str] = None,
+    logger: Optional[logging.Logger] = None
+) -> None:
+    """Log Claude worker completion.
+
+    Args:
+        session_id: Session identifier
+        worker_id: Worker thread identifier
+        repo: Repository name
+        success: Whether execution succeeded
+        output_chars: Number of characters in output
+        duration_s: Execution duration in seconds
+        log_path: Path to per-repo log file
+        logger: Optional logger instance
+    """
+    log = logger or get_mcp_logger()
+    status = "Completed" if success else "Failed"
+    log.info(f"[{session_id}][worker-{worker_id}] {repo}: {status} in {duration_s:.1f}s ({output_chars} chars)")
+    if log_path:
+        log.debug(f"[{session_id}][worker-{worker_id}] {repo}: Output logged to {log_path}")
+
+
+def log_claude_session_complete(
+    session_id: str,
+    output_dir: str,
+    logger: Optional[logging.Logger] = None
+) -> None:
+    """Log end of Claude execution session.
+
+    Args:
+        session_id: Session identifier
+        output_dir: Directory containing per-repo logs
+        logger: Optional logger instance
+    """
+    log = logger or get_mcp_logger()
+    log.info(f"[claude-exec] Session {session_id} complete. Logs: {output_dir}")

@@ -49,3 +49,59 @@ def get_logger() -> logging.Logger:
         Logger instance
     """
     return logging.getLogger('gitfleet')
+
+
+def write_claude_output_log(
+    session_id: str,
+    repo_name: str,
+    prompt: str,
+    output: str,
+    duration_s: float,
+    cost_usd: Optional[float] = None,
+    error: Optional[str] = None,
+    cwd: Optional[str] = None
+) -> str:
+    """Write full Claude output to per-repo log file.
+
+    Args:
+        session_id: Session identifier for grouping logs
+        repo_name: Name of the repository
+        prompt: The prompt that was executed
+        output: Full output from Claude
+        duration_s: Execution duration in seconds
+        cost_usd: Optional cost in USD
+        error: Optional error message if failed
+        cwd: Optional working directory
+
+    Returns:
+        Path to the created log file
+    """
+    from pathlib import Path
+
+    output_dir = Path(os.getcwd()) / "logs" / "claude_outputs" / session_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log_path = output_dir / f"{repo_name}.log"
+
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    status = "Success" if not error else f"Failed: {error}"
+    cost_str = f"${cost_usd:.4f}" if cost_usd else "N/A"
+
+    content = f"""{'='*80}
+Claude Execution Log
+{'='*80}
+Repository: {repo_name}
+Prompt: {prompt[:200]}{'...' if len(prompt) > 200 else ''}
+Started: {timestamp}
+Working Directory: {cwd or 'N/A'}
+{'-'*80}
+
+{output or '(no output)'}
+
+{'-'*80}
+Duration: {duration_s:.1f}s
+Cost: {cost_str}
+Status: {status}
+{'='*80}
+"""
+    log_path.write_text(content)
+    return str(log_path)

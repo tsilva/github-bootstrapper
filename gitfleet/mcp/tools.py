@@ -19,8 +19,20 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field, asdict
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 
-from .logging_utils import get_mcp_logger, log_repo_result, timed_operation
+import time
+from datetime import datetime
+
+from .logging_utils import (
+    get_mcp_logger,
+    log_repo_result,
+    timed_operation,
+    log_claude_session_start,
+    log_claude_worker_start,
+    log_claude_worker_complete,
+    log_claude_session_complete
+)
 from ..utils.async_bridge import run_async_with_timeout
+from ..core.logger import write_claude_output_log
 
 # SDK imports with graceful fallback
 try:
@@ -506,13 +518,17 @@ async def _execute_claude_sdk(
             permission_mode="acceptEdits"
         )
 
-        result = await asyncio.wait_for(
-            query(prompt=prompt, options=options),
-            timeout=timeout
-        )
+        async def consume_query():
+            """Consume async iterator and return result."""
+            async for message in query(prompt=prompt, options=options):
+                if hasattr(message, 'result'):
+                    return message.result, getattr(message, 'total_cost_usd', None)
+            return None, None
+
+        # query() returns an AsyncIterator[Message], must iterate to get results
+        result_text, cost_usd = await asyncio.wait_for(consume_query(), timeout=timeout)
 
         duration = time.time() - start_time
-        result_text = result.result if hasattr(result, 'result') else str(result)
         logger.debug(f"{repo_name}: Claude SDK completed | duration: {duration:.1f}s")
         log_repo_result(repo_name, "success", "Claude SDK completed")
 
@@ -769,7 +785,24 @@ def exec_command(
     mode = "parallel" if parallel and len(repos) > 1 else "sequential"
     logger.info(f"exec_command: {len(repos)} repos, type={cmd_type}, mode={mode}, dry_run={dry_run}")
 
-    def execute_on_repo(repo_name: str) -> ExecRepoResult:
+    # Generate session ID for Claude commands
+    session_id = datetime.now().strftime('%Y%m%d_%H%M%S') if cmd_type == "claude" else None
+
+    # Log Claude session start
+    if cmd_type == "claude":
+        log_claude_session_start(session_id, repos, cmd_value, parallel, workers, logger)
+
+    # Thread-safe worker ID counter for Claude logging
+    worker_counter = [0]
+    worker_lock = threading.Lock()
+
+    def get_next_worker_id() -> int:
+        with worker_lock:
+            wid = worker_counter[0]
+            worker_counter[0] += 1
+            return wid
+
+    def execute_on_repo(repo_name: str, worker_id: int = 0) -> ExecRepoResult:
         """Execute command on a single repository."""
         repo_path = os.path.join(base_dir, repo_name)
         logger.debug(f"exec_command: processing {repo_name}")
@@ -791,12 +824,43 @@ def exec_command(
                 output=f"[DRY RUN] Would execute: {command}"
             )
 
-        import time
+        # Log Claude worker start
+        claude_start_time = None
+        if cmd_type == "claude" and session_id:
+            prompt_preview = cmd_value[:80] + '...' if len(cmd_value) > 80 else cmd_value
+            log_claude_worker_start(session_id, worker_id, repo_name, prompt_preview, logger)
+            claude_start_time = time.time()
+
         try:
             if cmd_type == "claude":
                 # Execute Claude via SDK (preferred) or subprocess fallback
                 if SDK_AVAILABLE:
-                    return _execute_claude_sdk_sync(repo_path, cmd_value, timeout)
+                    sdk_result = _execute_claude_sdk_sync(repo_path, cmd_value, timeout)
+
+                    # Log Claude output and worker completion
+                    if session_id and claude_start_time:
+                        duration = time.time() - claude_start_time
+                        full_output = sdk_result.output or sdk_result.error or ""
+                        log_path = write_claude_output_log(
+                            session_id=session_id,
+                            repo_name=repo_name,
+                            prompt=cmd_value,
+                            output=full_output,
+                            duration_s=duration,
+                            cost_usd=None,  # SDK doesn't expose cost yet
+                            error=sdk_result.error if sdk_result.status != "success" else None,
+                            cwd=repo_path
+                        )
+                        log_claude_worker_complete(
+                            session_id, worker_id, repo_name,
+                            success=(sdk_result.status == "success"),
+                            output_chars=len(full_output),
+                            duration_s=duration,
+                            log_path=log_path,
+                            logger=logger
+                        )
+
+                    return sdk_result
                 else:
                     # Fallback to subprocess if SDK not available
                     logger.debug(f"{repo_name}: SDK not available, falling back to subprocess")
@@ -834,6 +898,30 @@ def exec_command(
             if proc_result.returncode == 0:
                 logger.debug(f"{repo_name}: command completed | duration: {duration:.1f}s")
                 log_repo_result(repo_name, "success", "Command completed")
+
+                # Log Claude output for subprocess fallback
+                if cmd_type == "claude" and session_id and claude_start_time:
+                    claude_duration = time.time() - claude_start_time
+                    full_output = proc_result.stdout or ""
+                    log_path = write_claude_output_log(
+                        session_id=session_id,
+                        repo_name=repo_name,
+                        prompt=cmd_value,
+                        output=full_output,
+                        duration_s=claude_duration,
+                        cost_usd=None,
+                        error=None,
+                        cwd=repo_path
+                    )
+                    log_claude_worker_complete(
+                        session_id, worker_id, repo_name,
+                        success=True,
+                        output_chars=len(full_output),
+                        duration_s=claude_duration,
+                        log_path=log_path,
+                        logger=logger
+                    )
+
                 return ExecRepoResult(
                     repo=repo_name,
                     status="success",
@@ -843,6 +931,30 @@ def exec_command(
             else:
                 logger.debug(f"{repo_name}: command failed | exit: {proc_result.returncode} | duration: {duration:.1f}s | stderr: {proc_result.stderr[:200] if proc_result.stderr else 'none'}")
                 log_repo_result(repo_name, "failed", f"Exit code {proc_result.returncode}")
+
+                # Log Claude output for subprocess fallback (failed)
+                if cmd_type == "claude" and session_id and claude_start_time:
+                    claude_duration = time.time() - claude_start_time
+                    full_output = proc_result.stdout or proc_result.stderr or ""
+                    log_path = write_claude_output_log(
+                        session_id=session_id,
+                        repo_name=repo_name,
+                        prompt=cmd_value,
+                        output=full_output,
+                        duration_s=claude_duration,
+                        cost_usd=None,
+                        error=proc_result.stderr[:500] if proc_result.stderr else "Command failed",
+                        cwd=repo_path
+                    )
+                    log_claude_worker_complete(
+                        session_id, worker_id, repo_name,
+                        success=False,
+                        output_chars=len(full_output),
+                        duration_s=claude_duration,
+                        log_path=log_path,
+                        logger=logger
+                    )
+
                 return ExecRepoResult(
                     repo=repo_name,
                     status="failed",
@@ -857,6 +969,30 @@ def exec_command(
                 f"cmd_type: {cmd_type} | cmd: {cmd_preview} | cwd: {repo_path}"
             )
             log_repo_result(repo_name, "failed", f"Timed out after {timeout}s")
+
+            # Log Claude timeout
+            if cmd_type == "claude" and session_id and claude_start_time:
+                claude_duration = time.time() - claude_start_time
+                error_msg = f"Command timed out after {timeout}s"
+                log_path = write_claude_output_log(
+                    session_id=session_id,
+                    repo_name=repo_name,
+                    prompt=cmd_value,
+                    output="",
+                    duration_s=claude_duration,
+                    cost_usd=None,
+                    error=error_msg,
+                    cwd=repo_path
+                )
+                log_claude_worker_complete(
+                    session_id, worker_id, repo_name,
+                    success=False,
+                    output_chars=0,
+                    duration_s=claude_duration,
+                    log_path=log_path,
+                    logger=logger
+                )
+
             return ExecRepoResult(
                 repo=repo_name,
                 status="failed",
@@ -865,6 +1001,30 @@ def exec_command(
         except FileNotFoundError as e:
             logger.error(f"Command not found for {repo_name} | cmd_type: {cmd_type} | error: {e}")
             log_repo_result(repo_name, "failed", f"Command not found: {e}")
+
+            # Log Claude error
+            if cmd_type == "claude" and session_id and claude_start_time:
+                claude_duration = time.time() - claude_start_time
+                error_msg = f"Command not found: {e}"
+                log_path = write_claude_output_log(
+                    session_id=session_id,
+                    repo_name=repo_name,
+                    prompt=cmd_value,
+                    output="",
+                    duration_s=claude_duration,
+                    cost_usd=None,
+                    error=error_msg,
+                    cwd=repo_path
+                )
+                log_claude_worker_complete(
+                    session_id, worker_id, repo_name,
+                    success=False,
+                    output_chars=0,
+                    duration_s=claude_duration,
+                    log_path=log_path,
+                    logger=logger
+                )
+
             return ExecRepoResult(
                 repo=repo_name,
                 status="failed",
@@ -873,6 +1033,30 @@ def exec_command(
         except Exception as e:
             logger.error(f"exec_command error for {repo_name} | cmd_type: {cmd_type} | error: {e}", exc_info=True)
             log_repo_result(repo_name, "failed", str(e))
+
+            # Log Claude error
+            if cmd_type == "claude" and session_id and claude_start_time:
+                claude_duration = time.time() - claude_start_time
+                error_msg = str(e)
+                log_path = write_claude_output_log(
+                    session_id=session_id,
+                    repo_name=repo_name,
+                    prompt=cmd_value,
+                    output="",
+                    duration_s=claude_duration,
+                    cost_usd=None,
+                    error=error_msg,
+                    cwd=repo_path
+                )
+                log_claude_worker_complete(
+                    session_id, worker_id, repo_name,
+                    success=False,
+                    output_chars=0,
+                    duration_s=claude_duration,
+                    log_path=log_path,
+                    logger=logger
+                )
+
             return ExecRepoResult(
                 repo=repo_name,
                 status="failed",
@@ -882,7 +1066,13 @@ def exec_command(
     # Execute
     if parallel and len(repos) > 1:
         with ThreadPoolExecutor(max_workers=min(workers, len(repos))) as executor:
-            futures = {executor.submit(execute_on_repo, repo): repo for repo in repos}
+            # Submit with worker_id for each repo
+            futures = {}
+            for repo in repos:
+                wid = get_next_worker_id()
+                future = executor.submit(execute_on_repo, repo, wid)
+                futures[future] = repo
+
             for future in as_completed(futures):
                 repo_name = futures[future]
                 try:
@@ -904,14 +1094,18 @@ def exec_command(
                 else:
                     result.failed.append(repo_result)
     else:
-        for repo in repos:
-            repo_result = execute_on_repo(repo)
+        for i, repo in enumerate(repos):
+            repo_result = execute_on_repo(repo, i)
             if repo_result.status == "success":
                 result.success.append(repo_result.repo)
             elif repo_result.status == "skipped":
                 result.skipped.append(repo_result.repo)
             else:
                 result.failed.append(repo_result)
+
+    # Log Claude session complete
+    if cmd_type == "claude" and session_id:
+        log_claude_session_complete(session_id, f"logs/claude_outputs/{session_id}", logger)
 
     return result
 
