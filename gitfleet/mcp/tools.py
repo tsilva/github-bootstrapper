@@ -149,8 +149,12 @@ class StatusSummary:
 # ============================================================================
 
 def _get_base_dir() -> str:
-    """Get base directory for repositories."""
-    return os.getcwd()
+    """Get base directory for repositories.
+
+    Uses GITFLEET_REPOS_DIR environment variable if set,
+    otherwise falls back to current working directory.
+    """
+    return os.environ.get('GITFLEET_REPOS_DIR', os.getcwd())
 
 
 def _gh_repo_list(owner: Optional[str] = None, limit: int = 1000) -> List[Dict[str, Any]]:
