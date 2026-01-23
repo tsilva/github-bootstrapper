@@ -268,7 +268,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
         if name == "gitfleet_list_repos":
             fields = arguments.get("fields", ["name"])
             limit = arguments.get("limit", 100)
-            result = list_repos(
+            result = await asyncio.to_thread(
+                list_repos,
                 source=arguments["source"],
                 filters=arguments.get("filters", []),
                 fields=fields,
@@ -286,7 +287,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             )
 
         elif name == "gitfleet_exec":
-            result = exec_command_parallel(
+            result = await asyncio.to_thread(
+                exec_command_parallel,
                 repos=arguments["repos"],
                 command=arguments["command"],
                 dry_run=arguments.get("dry_run", False),
@@ -302,7 +304,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             )
 
         elif name == "gitfleet_claude_exec":
-            result = exec_claude_single(
+            result = await asyncio.to_thread(
+                exec_claude_single,
                 repo=arguments["repo"],
                 prompt=arguments["prompt"],
                 dry_run=arguments.get("dry_run", False),
@@ -320,7 +323,8 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             )
 
         elif name == "gitfleet_sync":
-            result = sync_repos(
+            result = await asyncio.to_thread(
+                sync_repos,
                 repos=arguments["repos"],
                 operation=arguments.get("operation", "sync")
             )
@@ -334,7 +338,7 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             )
 
         elif name == "gitfleet_status":
-            result = get_status(repos=arguments["repos"])
+            result = await asyncio.to_thread(get_status, repos=arguments["repos"])
             output = result.to_dict()
             duration_ms = int((time.time() - start_time) * 1000)
             log_summary(
