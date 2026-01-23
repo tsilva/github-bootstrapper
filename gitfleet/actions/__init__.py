@@ -22,6 +22,12 @@ from .subprocess_ops import (
     ClaudeCliAction,
     GhCliAction,
     ClaudeCommitMessageAction,
+    ConditionalSkillAction,
+)
+
+from .claude_sdk import (
+    ClaudeSDKAction,
+    ConditionalSkillSDKAction,
 )
 
 from .description_sync import (
@@ -44,11 +50,15 @@ __all__ = [
     'JsonPatchAction',
     'JsonReadAction',
     'deep_merge',
-    # Subprocess actions
+    # Subprocess actions (legacy/fallback)
     'SubprocessAction',
     'ClaudeCliAction',
     'GhCliAction',
     'ClaudeCommitMessageAction',
+    'ConditionalSkillAction',
+    # Claude SDK actions (preferred)
+    'ClaudeSDKAction',
+    'ConditionalSkillSDKAction',
     # Description sync
     'DescriptionSyncAction',
     'extract_tagline',

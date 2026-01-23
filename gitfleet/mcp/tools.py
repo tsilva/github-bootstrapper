@@ -14,11 +14,23 @@ import subprocess
 import json
 import fnmatch
 import threading
+import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field, asdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 
 from .logging_utils import get_mcp_logger, log_repo_result, timed_operation
+from ..utils.async_bridge import run_async_with_timeout
+
+# SDK imports with graceful fallback
+try:
+    from claude_agent_sdk import query, ClaudeAgentOptions
+    from claude_agent_sdk.exceptions import CLINotFoundError, ProcessError
+    SDK_AVAILABLE = True
+except ImportError:
+    SDK_AVAILABLE = False
+    CLINotFoundError = Exception
+    ProcessError = Exception
 
 logger = get_mcp_logger()
 
@@ -455,6 +467,129 @@ def _get_sync_status(repo_path: str, fetch: bool = True) -> Dict[str, Any]:
 
 
 # ============================================================================
+# Claude SDK helper
+# ============================================================================
+
+async def _execute_claude_sdk(
+    repo_path: str,
+    prompt: str,
+    timeout: int
+) -> ExecRepoResult:
+    """Execute Claude prompt using the SDK.
+
+    Args:
+        repo_path: Path to the repository
+        prompt: The prompt to execute
+        timeout: Timeout in seconds
+
+    Returns:
+        ExecRepoResult with success/failed status
+    """
+    repo_name = os.path.basename(repo_path)
+
+    if not SDK_AVAILABLE:
+        logger.error("claude-agent-sdk not installed")
+        return ExecRepoResult(
+            repo=repo_name,
+            status="failed",
+            error="claude-agent-sdk not installed - run: pip install claude-agent-sdk"
+        )
+
+    import time
+    prompt_preview = prompt[:80] + '...' if len(prompt) > 80 else prompt
+    logger.debug(f"{repo_name}: executing Claude SDK | prompt: {prompt_preview} | timeout: {timeout}s | cwd: {repo_path}")
+    start_time = time.time()
+
+    try:
+        options = ClaudeAgentOptions(
+            cwd=repo_path,
+            permission_mode="acceptEdits"
+        )
+
+        result = await asyncio.wait_for(
+            query(prompt=prompt, options=options),
+            timeout=timeout
+        )
+
+        duration = time.time() - start_time
+        result_text = result.result if hasattr(result, 'result') else str(result)
+        logger.debug(f"{repo_name}: Claude SDK completed | duration: {duration:.1f}s")
+        log_repo_result(repo_name, "success", "Claude SDK completed")
+
+        return ExecRepoResult(
+            repo=repo_name,
+            status="success",
+            output=result_text[:5000] if result_text else None,
+            return_code=0
+        )
+
+    except CLINotFoundError:
+        logger.error(f"{repo_name}: Claude CLI not found")
+        log_repo_result(repo_name, "failed", "Claude CLI not found")
+        return ExecRepoResult(
+            repo=repo_name,
+            status="failed",
+            error="Claude CLI not found - ensure 'claude' is installed"
+        )
+    except ProcessError as e:
+        duration = time.time() - start_time
+        logger.debug(f"{repo_name}: Claude SDK failed | duration: {duration:.1f}s | error: {e}")
+        log_repo_result(repo_name, "failed", f"Process error: {e}")
+        return ExecRepoResult(
+            repo=repo_name,
+            status="failed",
+            error=str(e),
+            return_code=getattr(e, 'exit_code', 1)
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"{repo_name}: Claude SDK timed out after {timeout}s | prompt: {prompt_preview}")
+        log_repo_result(repo_name, "failed", f"Timed out after {timeout}s")
+        return ExecRepoResult(
+            repo=repo_name,
+            status="failed",
+            error=f"Claude SDK timed out after {timeout}s"
+        )
+    except Exception as e:
+        logger.error(f"{repo_name}: Claude SDK error | error: {e}", exc_info=True)
+        log_repo_result(repo_name, "failed", str(e))
+        return ExecRepoResult(
+            repo=repo_name,
+            status="failed",
+            error=str(e)
+        )
+
+
+def _execute_claude_sdk_sync(
+    repo_path: str,
+    prompt: str,
+    timeout: int
+) -> ExecRepoResult:
+    """Synchronous wrapper for _execute_claude_sdk.
+
+    Args:
+        repo_path: Path to the repository
+        prompt: The prompt to execute
+        timeout: Timeout in seconds
+
+    Returns:
+        ExecRepoResult with success/failed status
+    """
+    repo_name = os.path.basename(repo_path)
+    try:
+        return run_async_with_timeout(
+            _execute_claude_sdk(repo_path, prompt, timeout),
+            timeout=timeout + 5  # Extra buffer for async overhead
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"{repo_name}: Claude SDK wrapper timed out after {timeout}s")
+        return ExecRepoResult(
+            repo=repo_name,
+            status="failed",
+            error=f"Claude SDK timed out after {timeout}s"
+        )
+
+
+# ============================================================================
 # Tool implementations
 # ============================================================================
 
@@ -659,14 +794,19 @@ def exec_command(
         import time
         try:
             if cmd_type == "claude":
-                # Execute Claude CLI
-                cmd = [
-                    "claude",
-                    "-p", cmd_value,
-                    "--permission-mode", "acceptEdits",
-                    "--output-format", "json"
-                ]
-                cmd_preview = f"claude -p '{cmd_value[:80]}{'...' if len(cmd_value) > 80 else ''}'"
+                # Execute Claude via SDK (preferred) or subprocess fallback
+                if SDK_AVAILABLE:
+                    return _execute_claude_sdk_sync(repo_path, cmd_value, timeout)
+                else:
+                    # Fallback to subprocess if SDK not available
+                    logger.debug(f"{repo_name}: SDK not available, falling back to subprocess")
+                    cmd = [
+                        "claude",
+                        "-p", cmd_value,
+                        "--permission-mode", "acceptEdits",
+                        "--output-format", "json"
+                    ]
+                    cmd_preview = f"claude -p '{cmd_value[:80]}{'...' if len(cmd_value) > 80 else ''}'"
             elif cmd_type == "gh":
                 cmd = ["gh"] + cmd_value.split()
                 cmd_preview = f"gh {cmd_value}"
@@ -744,7 +884,19 @@ def exec_command(
         with ThreadPoolExecutor(max_workers=min(workers, len(repos))) as executor:
             futures = {executor.submit(execute_on_repo, repo): repo for repo in repos}
             for future in as_completed(futures):
-                repo_result = future.result()
+                repo_name = futures[future]
+                try:
+                    # Add timeout buffer for thread overhead beyond subprocess timeout
+                    repo_result = future.result(timeout=timeout + 60)
+                except FuturesTimeoutError:
+                    logger.error(f"Thread timeout for {repo_name} after {timeout + 60}s")
+                    log_repo_result(repo_name, "failed", "Thread execution timed out")
+                    result.failed.append(ExecRepoResult(
+                        repo=repo_name,
+                        status="failed",
+                        error=f"Thread execution timed out after {timeout + 60}s"
+                    ))
+                    continue
                 if repo_result.status == "success":
                     result.success.append(repo_result.repo)
                 elif repo_result.status == "skipped":

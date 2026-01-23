@@ -5,7 +5,8 @@ from typing import Optional
 from .base import Pipeline
 from ..predicates import RepoExists, NotArchived, FileExists, all_of
 from ..actions.description_sync import DescriptionSyncAction
-from ..actions.subprocess_ops import ClaudeCliAction
+from ..actions.claude_sdk import ClaudeSDKAction
+from ..actions.subprocess_ops import ClaudeCliAction  # Kept as fallback
 
 
 class DescriptionSyncPipeline(Pipeline):
@@ -34,14 +35,20 @@ class DescriptionSyncPipeline(Pipeline):
 
 
 class ClaudePipeline(Pipeline):
-    """Execute Claude CLI with a prompt.
+    """Execute Claude prompt via SDK.
 
-    This pipeline runs any prompt through Claude CLI, including skill invocations
-    like "/readme-generator" or "/claude-settings-optimizer --mode analyze".
+    This pipeline runs any prompt through the Claude Agent SDK, including skill
+    invocations like "/readme-generator" or "/claude-settings-optimizer --mode analyze".
+
+    Uses the claude-agent-sdk for:
+    - Native Python objects instead of JSON parsing
+    - Better error types with detailed info
+    - Cost tracking (total_cost_usd)
+    - Streaming support for long operations
     """
 
     name = "claude-exec"
-    description = "Execute Claude CLI prompt (supports skills via /skill-name)"
+    description = "Execute Claude prompt via SDK (supports skills via /skill-name)"
     requires_token = False
     safe_parallel = False  # Sequential for API rate limits
     show_progress_only = True
@@ -58,8 +65,8 @@ class ClaudePipeline(Pipeline):
         # Only run if repo exists
         self.when(RepoExists())
 
-        # Execute Claude CLI
-        self.then(ClaudeCliAction(prompt=prompt, timeout=timeout))
+        # Execute Claude via SDK (replaces ClaudeCliAction)
+        self.then(ClaudeSDKAction(prompt=prompt, timeout=timeout))
 
 
 # Factory functions

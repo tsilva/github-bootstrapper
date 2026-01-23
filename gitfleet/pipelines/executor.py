@@ -4,7 +4,7 @@ import os
 import logging
 import multiprocessing
 from typing import List, Dict, Any, Optional, Callable, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 
 from .base import Pipeline
 from ..core.types import RepoContext, ActionResult, Status, OperationResult, OperationStatus
@@ -215,6 +215,8 @@ class PipelineExecutor:
     ) -> List[OperationResult]:
         """Execute pipeline in parallel."""
         results = []
+        # Default timeout: 10 minutes per repo for git operations
+        thread_timeout = kwargs.get('timeout', 600)
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             future_to_repo = {
@@ -225,7 +227,18 @@ class PipelineExecutor:
             }
 
             for future in as_completed(future_to_repo):
-                result = future.result()
+                repo = future_to_repo[future]
+                repo_name = repo.get('name', 'unknown')
+                try:
+                    result = future.result(timeout=thread_timeout)
+                except FuturesTimeoutError:
+                    logger.error(f"Thread timeout for {repo_name} after {thread_timeout}s")
+                    result = OperationResult(
+                        status=OperationStatus.FAILED,
+                        message=f"Thread execution timed out after {thread_timeout}s",
+                        repo_name=repo_name,
+                        repo_full_name=repo.get('full_name', repo_name)
+                    )
                 results.append(result)
 
                 if progress_tracker:

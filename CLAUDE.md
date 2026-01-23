@@ -80,7 +80,8 @@ gitfleet/
 │   │   ├── base.py                 # Action base class
 │   │   ├── git.py                  # Git actions (CloneAction, PullAction)
 │   │   ├── json_ops.py             # JSON manipulation actions
-│   │   ├── subprocess_ops.py       # Subprocess actions (ClaudeCliAction, etc.)
+│   │   ├── subprocess_ops.py       # Subprocess actions (legacy fallback)
+│   │   ├── claude_sdk.py           # Claude SDK actions (preferred)
 │   │   └── description_sync.py     # Description sync action
 │   ├── pipelines/                  # Composable pipelines
 │   │   ├── base.py                 # Pipeline class with fluent API
@@ -93,7 +94,8 @@ gitfleet/
 │   └── utils/
 │       ├── git.py                  # Git helpers
 │       ├── progress.py             # Progress tracking
-│       └── filters.py              # Repository filtering
+│       ├── filters.py              # Repository filtering
+│       └── async_bridge.py         # Sync-to-async utilities for SDK
 ├── pyproject.toml                  # Package configuration
 └── uv.lock                         # Dependency lock file
 ```
@@ -210,12 +212,13 @@ RepoExists() | FileExists("README.md")  # OR
    - Fetches from remote to ensure accurate status
    - Provides grouped summary output via `post_batch_hook()`
 
-5. **claude-exec** - Execute Claude prompts
+5. **claude-exec** - Execute Claude prompts via SDK
    - Parallelization: No (Claude API rate limits)
    - Supports raw prompts and skill invocations (e.g., "/readme-generator")
    - Pre-execution briefing with confirmation prompt (can skip with `--yes`)
    - Force mode (`--force`) to ignore pipeline predicates
-   - Invokes Claude CLI: `claude -p "prompt" --permission-mode acceptEdits --output-format json`
+   - Uses `claude-agent-sdk` for native Python integration, cost tracking, and better error handling
+   - Falls back to subprocess if SDK not available
    - Timeout: 5 minutes per repo
 
 6. **settings-clean** - Analyze/clean Claude Code settings
@@ -254,6 +257,7 @@ RepoExists() | FileExists("README.md")  # OR
 
 - `requests`: GitHub API interaction
 - `python-dotenv`: Environment variable management
+- `claude-agent-sdk`: Claude Code SDK for native Python integration (async-native)
 - `PyGithub`: Currently installed but not used in code (consider removing or utilizing)
 
 ## Important Note
