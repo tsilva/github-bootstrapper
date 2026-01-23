@@ -13,11 +13,9 @@ import os
 import subprocess
 import json
 import fnmatch
-import threading
 import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field, asdict
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 
 import time
 from datetime import datetime
@@ -740,8 +738,6 @@ def list_repos(
 def exec_command(
     repos: List[str],
     command: str,
-    parallel: bool = True,
-    workers: int = 4,
     dry_run: bool = False,
     timeout: int = 300
 ) -> ExecutionResult:
@@ -754,11 +750,12 @@ def exec_command(
     - GitHub CLI: "gh:pr list"
     - Git command: "git:status"
 
+    Repositories are processed sequentially. For parallel execution,
+    use multiple MCP calls.
+
     Args:
         repos: List of repository names or paths
         command: Command to execute (with optional prefix)
-        parallel: Whether to execute in parallel
-        workers: Number of parallel workers
         dry_run: Preview without executing
         timeout: Timeout in seconds per repo
 
@@ -782,27 +779,16 @@ def exec_command(
         cmd_type = "git"
         cmd_value = command[4:]
 
-    mode = "parallel" if parallel and len(repos) > 1 else "sequential"
-    logger.info(f"exec_command: {len(repos)} repos, type={cmd_type}, mode={mode}, dry_run={dry_run}")
+    logger.info(f"exec_command: {len(repos)} repos, type={cmd_type}, dry_run={dry_run}")
 
     # Generate session ID for Claude commands
     session_id = datetime.now().strftime('%Y%m%d_%H%M%S') if cmd_type == "claude" else None
 
     # Log Claude session start
     if cmd_type == "claude":
-        log_claude_session_start(session_id, repos, cmd_value, parallel, workers, logger)
+        log_claude_session_start(session_id, repos, cmd_value, logger)
 
-    # Thread-safe worker ID counter for Claude logging
-    worker_counter = [0]
-    worker_lock = threading.Lock()
-
-    def get_next_worker_id() -> int:
-        with worker_lock:
-            wid = worker_counter[0]
-            worker_counter[0] += 1
-            return wid
-
-    def execute_on_repo(repo_name: str, worker_id: int = 0) -> ExecRepoResult:
+    def execute_on_repo(repo_name: str, repo_index: int = 0) -> ExecRepoResult:
         """Execute command on a single repository."""
         repo_path = os.path.join(base_dir, repo_name)
         logger.debug(f"exec_command: processing {repo_name}")
@@ -828,7 +814,7 @@ def exec_command(
         claude_start_time = None
         if cmd_type == "claude" and session_id:
             prompt_preview = cmd_value[:80] + '...' if len(cmd_value) > 80 else cmd_value
-            log_claude_worker_start(session_id, worker_id, repo_name, prompt_preview, logger)
+            log_claude_worker_start(session_id, repo_index, repo_name, prompt_preview, logger)
             claude_start_time = time.time()
 
         try:
@@ -852,7 +838,7 @@ def exec_command(
                             cwd=repo_path
                         )
                         log_claude_worker_complete(
-                            session_id, worker_id, repo_name,
+                            session_id, repo_index, repo_name,
                             success=(sdk_result.status == "success"),
                             output_chars=len(full_output),
                             duration_s=duration,
@@ -914,7 +900,7 @@ def exec_command(
                         cwd=repo_path
                     )
                     log_claude_worker_complete(
-                        session_id, worker_id, repo_name,
+                        session_id, repo_index, repo_name,
                         success=True,
                         output_chars=len(full_output),
                         duration_s=claude_duration,
@@ -947,7 +933,7 @@ def exec_command(
                         cwd=repo_path
                     )
                     log_claude_worker_complete(
-                        session_id, worker_id, repo_name,
+                        session_id, repo_index, repo_name,
                         success=False,
                         output_chars=len(full_output),
                         duration_s=claude_duration,
@@ -985,7 +971,7 @@ def exec_command(
                     cwd=repo_path
                 )
                 log_claude_worker_complete(
-                    session_id, worker_id, repo_name,
+                    session_id, repo_index, repo_name,
                     success=False,
                     output_chars=0,
                     duration_s=claude_duration,
@@ -1017,7 +1003,7 @@ def exec_command(
                     cwd=repo_path
                 )
                 log_claude_worker_complete(
-                    session_id, worker_id, repo_name,
+                    session_id, repo_index, repo_name,
                     success=False,
                     output_chars=0,
                     duration_s=claude_duration,
@@ -1049,7 +1035,7 @@ def exec_command(
                     cwd=repo_path
                 )
                 log_claude_worker_complete(
-                    session_id, worker_id, repo_name,
+                    session_id, repo_index, repo_name,
                     success=False,
                     output_chars=0,
                     duration_s=claude_duration,
@@ -1063,45 +1049,15 @@ def exec_command(
                 error=str(e)
             )
 
-    # Execute
-    if parallel and len(repos) > 1:
-        with ThreadPoolExecutor(max_workers=min(workers, len(repos))) as executor:
-            # Submit with worker_id for each repo
-            futures = {}
-            for repo in repos:
-                wid = get_next_worker_id()
-                future = executor.submit(execute_on_repo, repo, wid)
-                futures[future] = repo
-
-            for future in as_completed(futures):
-                repo_name = futures[future]
-                try:
-                    # Add timeout buffer for thread overhead beyond subprocess timeout
-                    repo_result = future.result(timeout=timeout + 60)
-                except FuturesTimeoutError:
-                    logger.error(f"Thread timeout for {repo_name} after {timeout + 60}s")
-                    log_repo_result(repo_name, "failed", "Thread execution timed out")
-                    result.failed.append(ExecRepoResult(
-                        repo=repo_name,
-                        status="failed",
-                        error=f"Thread execution timed out after {timeout + 60}s"
-                    ))
-                    continue
-                if repo_result.status == "success":
-                    result.success.append(repo_result.repo)
-                elif repo_result.status == "skipped":
-                    result.skipped.append(repo_result.repo)
-                else:
-                    result.failed.append(repo_result)
-    else:
-        for i, repo in enumerate(repos):
-            repo_result = execute_on_repo(repo, i)
-            if repo_result.status == "success":
-                result.success.append(repo_result.repo)
-            elif repo_result.status == "skipped":
-                result.skipped.append(repo_result.repo)
-            else:
-                result.failed.append(repo_result)
+    # Execute sequentially
+    for i, repo in enumerate(repos):
+        repo_result = execute_on_repo(repo, i)
+        if repo_result.status == "success":
+            result.success.append(repo_result.repo)
+        elif repo_result.status == "skipped":
+            result.skipped.append(repo_result.repo)
+        else:
+            result.failed.append(repo_result)
 
     # Log Claude session complete
     if cmd_type == "claude" and session_id:

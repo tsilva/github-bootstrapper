@@ -213,8 +213,6 @@ def log_claude_session_start(
     session_id: str,
     repos: list,
     command: str,
-    parallel: bool,
-    workers: int,
     logger: Optional[logging.Logger] = None
 ) -> None:
     """Log start of Claude execution session.
@@ -223,12 +221,10 @@ def log_claude_session_start(
         session_id: Unique session identifier
         repos: List of repository names
         command: The Claude command being executed
-        parallel: Whether execution is parallel
-        workers: Number of parallel workers
         logger: Optional logger instance
     """
     log = logger or get_mcp_logger()
-    log.info(f"[claude-exec] Session {session_id}: {len(repos)} repos, parallel={parallel}, workers={workers}")
+    log.info(f"[claude-exec] Session {session_id}: {len(repos)} repos")
     cmd_preview = command[:100] + '...' if len(command) > 100 else command
     log.info(f"[claude-exec] Command: {cmd_preview}")
 

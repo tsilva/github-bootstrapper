@@ -94,7 +94,7 @@ Supported filters:
     ),
     Tool(
         name="gitfleet_exec",
-        description="""Execute commands across multiple repositories in parallel.
+        description="""Execute commands across multiple repositories.
 
 This is the main workhorse tool for running operations across repos.
 
@@ -123,16 +123,6 @@ The tool returns structured results showing which repos succeeded, failed, or we
                 "command": {
                     "type": "string",
                     "description": "Command to execute (with optional prefix: claude:, gh:, git:)"
-                },
-                "parallel": {
-                    "type": "boolean",
-                    "description": "Execute in parallel (default: true)",
-                    "default": True
-                },
-                "workers": {
-                    "type": "integer",
-                    "description": "Number of parallel workers (default: 4)",
-                    "default": 4
                 },
                 "dry_run": {
                     "type": "boolean",
@@ -249,8 +239,6 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> list[TextCon
             result = exec_command(
                 repos=arguments["repos"],
                 command=arguments["command"],
-                parallel=arguments.get("parallel", True),
-                workers=arguments.get("workers", 4),
                 dry_run=arguments.get("dry_run", False),
                 timeout=arguments.get("timeout", 300)
             )
