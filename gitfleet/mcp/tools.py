@@ -281,8 +281,10 @@ def _parse_filters(filters: List[str]) -> Dict[str, Any]:
     """Parse filter strings into filter parameters.
 
     Supported filters:
-    - "!archived" - exclude archived repos
-    - "!fork" - exclude forked repos
+    - "archived" - include archived repos (excluded by default)
+    - "fork" - include forked repos (excluded by default)
+    - "!archived" - exclude archived repos (default behavior)
+    - "!fork" - exclude forked repos (default behavior)
     - "language:python" - filter by language
     - "owner:myorg" - filter by owner
     - "pattern:my-*" - filter by glob pattern
@@ -296,8 +298,8 @@ def _parse_filters(filters: List[str]) -> Dict[str, Any]:
         Dictionary of filter parameters
     """
     result = {
-        "include_archived": True,
-        "include_forks": True,
+        "include_archived": False,  # Exclude archived by default
+        "include_forks": False,     # Exclude forks by default
         "language": None,
         "owner": None,
         "pattern": None,
@@ -306,8 +308,12 @@ def _parse_filters(filters: List[str]) -> Dict[str, Any]:
     }
 
     for f in filters:
-        if f == "!archived":
+        if f == "archived":
+            result["include_archived"] = True
+        elif f == "!archived":
             result["include_archived"] = False
+        elif f == "fork":
+            result["include_forks"] = True
         elif f == "!fork":
             result["include_forks"] = False
         elif f.startswith("language:"):

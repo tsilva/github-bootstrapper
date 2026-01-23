@@ -57,8 +57,10 @@ Examples:
 - Filter by owner: filters=["owner:mycompany", "!fork"]
 
 Supported filters:
-- "!archived" - exclude archived repos
-- "!fork" - exclude forked repos
+- "!archived" - exclude archived repos (default)
+- "!fork" - exclude forked repos (default)
+- "archived" - include archived repos
+- "fork" - include forked repos
 - "language:X" - filter by language
 - "owner:X" - filter by owner/org
 - "pattern:X" - filter by glob pattern (e.g., "pattern:my-*")
@@ -74,7 +76,7 @@ Supported filters:
                 "filters": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Filter strings like ['!archived', '!fork', 'language:python']",
+                    "description": "Filter strings. Archived and forked repos are excluded by default. Use 'archived' or 'fork' to include them.",
                     "default": []
                 },
                 "fields": {
