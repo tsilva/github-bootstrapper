@@ -29,8 +29,8 @@ def setup_mcp_logging(operation: str = "server") -> logging.Logger:
     Returns:
         Configured logger instance
     """
-    # Create logs directory if it doesn't exist
-    logs_dir = os.path.join(os.getcwd(), 'logs')
+    # Create logs directory in centralized location
+    logs_dir = os.path.join(os.path.expanduser('~'), '.gitfleet', 'logs')
     os.makedirs(logs_dir, exist_ok=True)
 
     # Create timestamp-based log filename

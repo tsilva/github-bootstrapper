@@ -5,7 +5,7 @@
   [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![GitHub](https://img.shields.io/badge/GitHub-tsilva%2Fgitfleet-blue?logo=github)](https://github.com/tsilva/gitfleet)
 
-  **🚢 Bulk operations across all your GitHub repositories with parallel processing and smart filtering**
+  **🚢 Bulk operations across all your GitHub repositories with parallel processing and smart filtering ⚡**
 
 </div>
 
