@@ -11,6 +11,8 @@
 
 ## Overview
 
+[![CI](https://github.com/tsilva/gitfleet/actions/workflows/release.yml/badge.svg)](https://github.com/tsilva/gitfleet/actions/workflows/release.yml)
+
 gitfleet is a CLI tool that performs bulk operations on your GitHub repositories. Sync, clone, pull, check status, or execute Claude prompts across dozens of repos in one command.
 
 ## Features
